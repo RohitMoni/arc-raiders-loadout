@@ -37,16 +37,12 @@ function App() {
                     <div key={i} className="grid-item"></div>
                   ))}
                 </div>
-              </div>
-              <div className="sub-section">
                 <h3 className="section-title">EXTRA</h3>
                 <div className="extra-grid">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="grid-item"></div>
                   ))}
                 </div>
-              </div>
-              <div className="sub-section">
                 <h3 className="section-title">SAFE POCKET</h3>
                 <div className="safe-pocket-grid">
                   {Array.from({ length: 3 }).map((_, i) => (
