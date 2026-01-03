@@ -2,8 +2,8 @@
   display: flex;
   width: 100%;
   height: 100vh;
-  padding: 1rem;
-  gap: 1rem;
+  padding: 16px;
+  gap: 16px;
   box-sizing: border-box;
 }
 
@@ -13,10 +13,109 @@
   height: 100%;
 }
 
-.left-panel {
+.inventory-panel {
   flex: 1;
 }
 
-.right-panel {
+.loadout-panel {
   flex: 2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-title-row {
+  padding: 32px 32px 0 32px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+}
+
+.panel-subtitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 3fr 4fr 3fr;
+  gap: 32px;
+  padding: 32px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ddd;
+  letter-spacing: 0.05em;
+  flex: none;
+}
+
+.column-left, .column-middle, .column-right {
+  display: flex;
+  flex-direction: column;
+}
+
+.augment-shield-row {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+}
+
+.augment-slot, .shield-slot {
+  height: 100px;
+  width: 150px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 0 0 30px 0px;
+}
+
+.weapon-slot {
+  height: 200px;
+  width: 322px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 0 0 20px 0px;
+  flex: none;
+}
+
+.backpack-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 8px;
+  flex-grow: 1;
+}
+
+.sub-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.quick-use-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.extra-grid, .safe-pocket-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.grid-item {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
