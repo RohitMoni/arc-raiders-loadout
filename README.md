@@ -1,21 +1,29 @@
-# React + TypeScript + Vite
+# Arc Raiders Loadout Looter
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Figure out what you need to loot to keep your loadout going.
 
-While this project uses React, Vite supports many popular JS frameworks. [See all the supported frameworks](https://vitejs.dev/guide/#scaffolding-your-first-vite-project).
+## Requirements
 
-## Deploy Your Own
+[nodejs + npm](https://nodejs.org/en/download/)
 
-Deploy your own Vite project with Vercel.
+## Getting Started
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/vercel/examples/tree/main/framework-boilerplates/vite-react&template=vite-react)
+* Clone the repo
+* Run `npm install`
 
-_Live Example: https://vite-react-example.vercel.app_
+### Local 
 
-### Deploying From Your Terminal
+* Run `npm run dev` to host a local server that you can see in your browser
 
-You can deploy your new Vite project with a single command from your terminal using [Vercel CLI](https://vercel.com/download):
+### Remote
 
-```shell
-$ vercel
-```
+* Pushing anything to `main` will auto-deploy to https://arc-raiders-loadout-looter.vercel.app/
+
+## High level architecture
+
+Using Vite + React.
+Deployed on [Vercel](https://vercel.com/).
+This is a client-side application, no auth, no database.
+All Arc Raiders item data is pulled from https://github.com/RohitMoni/arc-raiders-data, which is a fork of https://github.com/RaidTheory/arcraiders-data
+
+
