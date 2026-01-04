@@ -1,4 +1,4 @@
-import { useState, useEffect, DragEvent, MouseEvent } from 'react'
+import { useState, useEffect, DragEvent, MouseEvent, useRef } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
@@ -50,11 +50,17 @@ interface LoadoutState {
   safePocket: (Item | null)[]
 }
 
+const emptyImg = new Image()
+emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
 function App() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
+  const ghostRef = useRef<HTMLDivElement>(null)
+  const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
+  const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
     augment: null,
     shield: null,
@@ -138,50 +144,37 @@ function App() {
     setDraggedItem(item)
     e.dataTransfer.effectAllowed = 'move'
 
-    const dragGhost = document.createElement('div')
-    dragGhost.className = 'slot-item'
-    dragGhost.style.width = '130px'
-    dragGhost.style.height = '130px'
-    dragGhost.style.position = 'absolute'
-    dragGhost.style.top = '-1000px'
-    dragGhost.style.left = '-1000px'
-    dragGhost.style.borderRadius = '12px'
-    dragGhost.style.border = '1px solid rgba(255, 255, 255, 0.2)'
-    dragGhost.style.background = 'rgba(13, 16, 28, 0.9)'
-
-    if (item.isImage) {
-      const img = document.createElement('img')
-      img.src = item.icon
-      dragGhost.appendChild(img)
-    } else {
-      const icon = document.createElement('span')
-      icon.className = 'slot-item-text'
-      icon.textContent = item.icon
-      dragGhost.appendChild(icon)
-    }
-
-    const name = document.createElement('span')
-    name.className = 'slot-item-name'
-    name.textContent = item.name
-    dragGhost.appendChild(name)
-
-    document.body.appendChild(dragGhost)
-    e.dataTransfer.setDragImage(dragGhost, 65, 65)
-    setTimeout(() => document.body.removeChild(dragGhost), 0)
+    // Hide default drag image
+    e.dataTransfer.setDragImage(emptyImg, 0, 0)
   }
 
   const handleDragEnd = () => {
     setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
   }
 
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault()
+    if (activeSlot) setActiveSlot(null)
+    if (dropValidity !== null) setDropValidity(null)
   }
 
   const handleLoadoutPanelDragOver = (e: DragEvent) => {
     e.stopPropagation()
     // We do NOT preventDefault here. This ensures that dropping on the loadout panel background
     // does not trigger the "remove" drop on the app-container, nor does it allow a drop itself.
+    if (activeSlot) setActiveSlot(null)
+    if (dropValidity !== null) setDropValidity(null)
+  }
+
+  const handleGlobalDragOverCapture = (e: DragEvent) => {
+    // Track cursor directly on the DOM element to avoid re-renders
+    if (ghostRef.current) {
+      ghostRef.current.style.left = `${e.clientX - 65}px`
+      ghostRef.current.style.top = `${e.clientY - 65}px`
+    }
+    e.preventDefault()
   }
 
   const canEquip = (category: string, slotType: string) => {
@@ -242,19 +235,21 @@ function App() {
       return newLoadout
     })
     setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
   }
 
   const handleAppDrop = (e: DragEvent) => {
     e.preventDefault()
     const data = e.dataTransfer.getData('application/json')
     if (!data) return
-    const { item, sourceSection, sourceIndex } = JSON.parse(data)
+    const { item, sourceSection, sourceIndex } = JSON.parse(data) as { item: Item, sourceSection: string, sourceIndex?: number }
 
     if (sourceSection !== 'inventory') {
       // Remove from loadout and add back to inventory
       setLoadout((prev) => {
         const newLoadout = { ...prev }
-        if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection])) {
+        if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection as keyof LoadoutState])) {
           (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = null
         } else {
           (newLoadout[sourceSection as keyof LoadoutState] as any) = null
@@ -264,6 +259,8 @@ function App() {
       setInventoryItems((prev) => [...prev, item])
     }
     setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
@@ -291,14 +288,20 @@ function App() {
     const isDragging = !!draggedItem
     const isValid = isDragging ? canEquip(draggedItem!.category, section) : true
     const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
+    const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index
 
     return (
       <div
-        className={`${className} ${dropClass}`}
+        className={`${className} ${dropClass} ${isActiveSlot ? 'active-slot' : ''}`}
         style={{ position: 'relative' }}
         onDragOver={(e) => {
           e.preventDefault()
           e.stopPropagation()
+          const newValidity = isValid ? 'valid' : 'invalid'
+          if (dropValidity !== newValidity) setDropValidity(newValidity)
+          if (isDragging && (!activeSlot || activeSlot.section !== section || activeSlot.index !== index)) {
+            setActiveSlot({ section, index })
+          }
         }}
         onDrop={(e) => handleSlotDrop(e, section, index)}
         onClick={(e) => handleSlotClick(e, section, index)}
@@ -316,7 +319,12 @@ function App() {
 
   return (
     <>
-      <div className="app-container" onDragOver={handleDragOver} onDrop={handleAppDrop}>
+      <div
+        className="app-container"
+        onDragOver={handleDragOver}
+        onDragOverCapture={handleGlobalDragOverCapture}
+        onDrop={handleAppDrop}
+      >
         <div className="box inventory-panel">
           <div className="panel-title-row">
             <h1 className="panel-title">INVENTORY</h1>
@@ -461,6 +469,32 @@ function App() {
           </div>
         </div>
       </div>
+
+      {draggedItem && (
+        <div
+          ref={ghostRef}
+          className="slot-item"
+          style={{
+            position: 'fixed',
+            left: '-1000px',
+            top: '-1000px',
+            width: '130px',
+            height: '130px',
+            pointerEvents: 'none',
+            zIndex: 1000,
+            borderRadius: '12px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            background:
+              dropValidity === 'valid'
+                ? 'rgba(135, 206, 250, 0.4)' // Light Blue
+                : 'rgba(255, 99, 71, 0.4)', // Light Red
+          }}
+        >
+          {draggedItem.isImage ? <img src={draggedItem.icon} alt={draggedItem.name} /> : <span className="slot-item-text">{draggedItem.icon}</span>}
+          <span className="slot-item-name">{draggedItem.name}</span>
+        </div>
+      )}
+
       <SpeedInsights />
     </>
   )

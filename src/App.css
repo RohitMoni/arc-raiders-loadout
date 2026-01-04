@@ -304,10 +304,41 @@
   border-radius: inherit;
 }
 
-.valid-drop-target:hover {
+.valid-drop-target.active-slot {
   background-color: rgba(135, 206, 250, 0.2); /* Light Sky Blue transparent */
 }
 
-.invalid-drop-target:hover {
+.invalid-drop-target.active-slot {
   background-color: rgba(255, 99, 71, 0.2); /* Tomato transparent */
+}
+
+@keyframes border-glow-rotate {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.valid-drop-target.active-slot::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: inherit;
+  background: linear-gradient(60deg, rgba(135, 206, 250, 0.1), rgba(135, 206, 250, 1), rgba(135, 206, 250, 0.1));
+  background-size: 300% 300%;
+  animation: border-glow-rotate 3s ease infinite;
+  z-index: 10;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 3px;
 }
