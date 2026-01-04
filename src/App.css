@@ -287,3 +287,27 @@
   text-overflow: ellipsis;
   pointer-events: none;
 }
+
+.slot-invalid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  pointer-events: none;
+  z-index: 10;
+  border-radius: inherit;
+}
+
+.valid-drop-target:hover {
+  background-color: rgba(135, 206, 250, 0.2); /* Light Sky Blue transparent */
+}
+
+.invalid-drop-target:hover {
+  background-color: rgba(255, 99, 71, 0.2); /* Tomato transparent */
+}

@@ -54,6 +54,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
+  const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
     augment: null,
     shield: null,
@@ -134,6 +135,7 @@ function App() {
 
   const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
     e.dataTransfer.setData('application/json', JSON.stringify({ item, sourceSection, sourceIndex }))
+    setDraggedItem(item)
     e.dataTransfer.effectAllowed = 'move'
 
     const dragGhost = document.createElement('div')
@@ -166,6 +168,10 @@ function App() {
     document.body.appendChild(dragGhost)
     e.dataTransfer.setDragImage(dragGhost, 65, 65)
     setTimeout(() => document.body.removeChild(dragGhost), 0)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedItem(null)
   }
 
   const handleDragOver = (e: DragEvent) => {
@@ -235,6 +241,7 @@ function App() {
 
       return newLoadout
     })
+    setDraggedItem(null)
   }
 
   const handleAppDrop = (e: DragEvent) => {
@@ -256,6 +263,7 @@ function App() {
       })
       setInventoryItems((prev) => [...prev, item])
     }
+    setDraggedItem(null)
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
@@ -280,10 +288,14 @@ function App() {
 
   const renderSlot = (section: keyof LoadoutState, index: number = -1, className: string) => {
     const item = index === -1 ? (loadout[section] as Item | null) : (loadout[section] as (Item | null)[])[index]
+    const isDragging = !!draggedItem
+    const isValid = isDragging ? canEquip(draggedItem!.category, section) : true
+    const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
 
     return (
       <div
-        className={className}
+        className={`${className} ${dropClass}`}
+        style={{ position: 'relative' }}
         onDragOver={(e) => {
           e.preventDefault()
           e.stopPropagation()
@@ -292,11 +304,12 @@ function App() {
         onClick={(e) => handleSlotClick(e, section, index)}
       >
         {item && (
-          <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, item, section, index)}>
+          <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, item, section, index)} onDragEnd={handleDragEnd}>
             {item.isImage ? <img src={item.icon} alt={item.name} draggable={false} /> : <span className="slot-item-text">{item.icon}</span>}
             <span className="slot-item-name">{item.name}</span>
           </div>
         )}
+        {isDragging && !isValid && <div className="slot-invalid-overlay">🚫</div>}
       </div>
     )
   }
@@ -382,6 +395,7 @@ function App() {
                     className="inventory-item-row"
                     draggable
                     onDragStart={(e) => handleDragStart(e, item, 'inventory')}
+                    onDragEnd={handleDragEnd}
                   >
                     <div className="item-icon-placeholder">
                       {item.isImage ? (
