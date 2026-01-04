@@ -135,6 +135,37 @@ function App() {
   const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
     e.dataTransfer.setData('application/json', JSON.stringify({ item, sourceSection, sourceIndex }))
     e.dataTransfer.effectAllowed = 'move'
+
+    const dragGhost = document.createElement('div')
+    dragGhost.className = 'slot-item'
+    dragGhost.style.width = '130px'
+    dragGhost.style.height = '130px'
+    dragGhost.style.position = 'absolute'
+    dragGhost.style.top = '-1000px'
+    dragGhost.style.left = '-1000px'
+    dragGhost.style.borderRadius = '12px'
+    dragGhost.style.border = '1px solid rgba(255, 255, 255, 0.2)'
+    dragGhost.style.background = 'rgba(13, 16, 28, 0.9)'
+
+    if (item.isImage) {
+      const img = document.createElement('img')
+      img.src = item.icon
+      dragGhost.appendChild(img)
+    } else {
+      const icon = document.createElement('span')
+      icon.className = 'slot-item-text'
+      icon.textContent = item.icon
+      dragGhost.appendChild(icon)
+    }
+
+    const name = document.createElement('span')
+    name.className = 'slot-item-name'
+    name.textContent = item.name
+    dragGhost.appendChild(name)
+
+    document.body.appendChild(dragGhost)
+    e.dataTransfer.setDragImage(dragGhost, 65, 65)
+    setTimeout(() => document.body.removeChild(dragGhost), 0)
   }
 
   const handleDragOver = (e: DragEvent) => {
@@ -263,6 +294,7 @@ function App() {
         {item && (
           <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, item, section, index)}>
             {item.isImage ? <img src={item.icon} alt={item.name} draggable={false} /> : <span className="slot-item-text">{item.icon}</span>}
+            <span className="slot-item-name">{item.name}</span>
           </div>
         )}
       </div>
