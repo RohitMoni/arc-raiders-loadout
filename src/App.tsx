@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, DragEvent, MouseEvent } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
@@ -32,10 +32,37 @@ const getLevenshteinDistance = (a: string, b: string) => {
   return matrix[b.length][a.length]
 }
 
+interface Item {
+  id: string
+  name: string
+  category: string
+  icon: string
+  isImage: boolean
+}
+
+interface LoadoutState {
+  augment: Item | null
+  shield: Item | null
+  weapons: (Item | null)[]
+  backpack: (Item | null)[]
+  quickUse: (Item | null)[]
+  extra: (Item | null)[]
+  safePocket: (Item | null)[]
+}
+
 function App() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
-  const [inventoryItems, setInventoryItems] = useState<any[]>([])
+  const [inventoryItems, setInventoryItems] = useState<Item[]>([])
+  const [loadout, setLoadout] = useState<LoadoutState>({
+    augment: null,
+    shield: null,
+    weapons: [null, null],
+    backpack: Array(24).fill(null),
+    quickUse: Array(4).fill(null),
+    extra: Array(3).fill(null),
+    safePocket: Array(3).fill(null),
+  })
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -105,9 +132,146 @@ function App() {
     })
   })
 
+  const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({ item, sourceSection, sourceIndex }))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleLoadoutPanelDragOver = (e: DragEvent) => {
+    e.stopPropagation()
+    // We do NOT preventDefault here. This ensures that dropping on the loadout panel background
+    // does not trigger the "remove" drop on the app-container, nor does it allow a drop itself.
+  }
+
+  const canEquip = (category: string, slotType: string) => {
+    switch (category) {
+      case 'Augment': return slotType === 'augment'
+      case 'Shield': return slotType === 'shield' || slotType === 'backpack' || slotType === 'safePocket'
+      case 'Weapon': return slotType === 'weapons' || slotType === 'backpack'
+      case 'Ammunition': return slotType === 'backpack' || slotType === 'safePocket'
+      case 'Mod': return slotType === 'backpack' || slotType === 'safePocket'
+      case 'Quick Use': return slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket'
+      case 'Key': return slotType === 'backpack' || slotType === 'safePocket'
+      default: return false
+    }
+  }
+
+  const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const data = e.dataTransfer.getData('application/json')
+    if (!data) return
+
+    const { item, sourceSection, sourceIndex } = JSON.parse(data) as { item: Item, sourceSection: string, sourceIndex?: number }
+
+    if (!canEquip(item.category, targetSection)) return
+
+    // Remove from source
+    if (sourceSection === 'inventory') {
+      setInventoryItems((prev) => prev.filter((i) => i.id !== item.id))
+    } else {
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection as keyof LoadoutState])) {
+          (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = null
+        } else {
+          (newLoadout[sourceSection as keyof LoadoutState] as any) = null
+        }
+        return newLoadout
+      })
+    }
+
+    // Handle target existing item (swap/return to inventory)
+    setLoadout((prev) => {
+      const newLoadout = { ...prev }
+      let existingItem: Item | null = null
+
+      if (targetIndex !== -1 && Array.isArray(newLoadout[targetSection])) {
+        existingItem = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
+        ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = item
+      } else {
+        existingItem = newLoadout[targetSection] as Item | null
+        ;(newLoadout[targetSection] as any) = item
+      }
+
+      if (existingItem) {
+        setInventoryItems((inv) => [...inv, existingItem!])
+      }
+
+      return newLoadout
+    })
+  }
+
+  const handleAppDrop = (e: DragEvent) => {
+    e.preventDefault()
+    const data = e.dataTransfer.getData('application/json')
+    if (!data) return
+    const { item, sourceSection, sourceIndex } = JSON.parse(data)
+
+    if (sourceSection !== 'inventory') {
+      // Remove from loadout and add back to inventory
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection])) {
+          (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = null
+        } else {
+          (newLoadout[sourceSection as keyof LoadoutState] as any) = null
+        }
+        return newLoadout
+      })
+      setInventoryItems((prev) => [...prev, item])
+    }
+  }
+
+  const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
+    if (e.shiftKey) {
+      e.preventDefault()
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        let item: Item | null = null
+        if (index !== -1 && Array.isArray(newLoadout[section])) {
+          item = (newLoadout[section] as (Item | null)[])[index]
+          ;(newLoadout[section] as (Item | null)[])[index] = null
+        } else {
+          item = newLoadout[section] as Item | null
+          ;(newLoadout[section] as any) = null
+        }
+
+        if (item) setInventoryItems((inv) => [...inv, item!])
+        return newLoadout
+      })
+    }
+  }
+
+  const renderSlot = (section: keyof LoadoutState, index: number = -1, className: string) => {
+    const item = index === -1 ? (loadout[section] as Item | null) : (loadout[section] as (Item | null)[])[index]
+
+    return (
+      <div
+        className={className}
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onDrop={(e) => handleSlotDrop(e, section, index)}
+        onClick={(e) => handleSlotClick(e, section, index)}
+      >
+        {item && (
+          <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, item, section, index)}>
+            {item.isImage ? <img src={item.icon} alt={item.name} draggable={false} /> : <span className="slot-item-text">{item.icon}</span>}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
-      <div className="app-container">
+      <div className="app-container" onDragOver={handleDragOver} onDrop={handleAppDrop}>
         <div className="box inventory-panel">
           <div className="panel-title-row">
             <h1 className="panel-title">INVENTORY</h1>
@@ -181,7 +345,12 @@ function App() {
               />
               <div className="inventory-list">
                 {filteredItems.map((item) => (
-                  <div key={item.id} className="inventory-item-row">
+                  <div
+                    key={item.id}
+                    className="inventory-item-row"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item, 'inventory')}
+                  >
                     <div className="item-icon-placeholder">
                       {item.isImage ? (
                         <img src={item.icon} alt={item.name} className="item-icon-image" />
@@ -198,7 +367,7 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="box loadout-panel">
+        <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver}>
           <div className="panel-title-row">
             <h1 className="panel-title">LOADOUT</h1>
             <h2 className="panel-subtitle">Subtitle</h2>
@@ -207,17 +376,17 @@ function App() {
             <div className="column-left">
               <h3 className="section-title">EQUIPMENT</h3>
               <div className="augment-shield-row">
-                <div className="augment-slot"></div>
-                <div className="shield-slot"></div>
+                {renderSlot('augment', -1, 'augment-slot')}
+                {renderSlot('shield', -1, 'shield-slot')}
               </div>
-              <div className="weapon-slot"></div>
-              <div className="weapon-slot"></div>
+              {renderSlot('weapons', 0, 'weapon-slot')}
+              {renderSlot('weapons', 1, 'weapon-slot')}
             </div>
             <div className="column-middle">
               <h3 className="section-title">BACKPACK</h3>
               <div className="backpack-grid">
                 {Array.from({ length: 24 }).map((_, i) => (
-                  <div key={i} className="grid-item"></div>
+                  <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
                 ))}
               </div>
             </div>
@@ -226,19 +395,19 @@ function App() {
                 <h3 className="section-title">QUICK USE</h3>
                 <div className="quick-use-grid">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="grid-item"></div>
+                    <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
                   ))}
                 </div>
                 <h3 className="section-title">EXTRA</h3>
                 <div className="extra-grid">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="grid-item"></div>
+                    <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
                   ))}
                 </div>
                 <h3 className="section-title">SAFE POCKET</h3>
                 <div className="safe-pocket-grid">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="grid-item"></div>
+                    <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
                   ))}
                 </div>
               </div>

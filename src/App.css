@@ -193,13 +193,17 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid transparent;
   border-radius: 8px;
-  cursor: pointer;
+  cursor: grab;
   transition: background 0.2s;
 }
 
 .inventory-item-row:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.inventory-item-row:active {
+  cursor: grabbing;
 }
 
 .item-icon-placeholder {
@@ -238,4 +242,30 @@
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.slot-item {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.slot-item:active {
+  cursor: grabbing;
+}
+
+.slot-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.slot-item-text {
+  font-size: 20px;
 }
