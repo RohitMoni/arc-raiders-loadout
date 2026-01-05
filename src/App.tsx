@@ -38,6 +38,7 @@ interface Item {
   category: string
   icon: string
   isImage: boolean
+  recipe?: Record<string, number>
 }
 
 interface LoadoutState {
@@ -57,6 +58,8 @@ function App() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
+  const [allItemData, setAllItemData] = useState<Record<string, Item>>({})
+  const [showLootTable, setShowLootTable] = useState(false)
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
@@ -87,7 +90,60 @@ function App() {
 
         const rawItems = await Promise.all(itemPromises)
 
-        const processedItems = rawItems
+        const normalizedItems = rawItems.map((item: any) => ({
+          ...item,
+          id: item.id || item.fileName.replace('.json', ''),
+        }))
+
+        const itemMap = new Map(normalizedItems.map((item: any) => [item.id, item]))
+
+        const resolveRecipe = (item: any) => {
+          const id = item.id
+          const match = id.match(/^(.+)_(i|ii|iii|iv|v)$/)
+          if (!match) return item.recipe
+
+          const baseName = match[1]
+          const tierStr = match[2]
+          const tiers = ['i', 'ii', 'iii', 'iv', 'v']
+          const targetTier = tiers.indexOf(tierStr) + 1
+
+          if (!itemMap.has(`${baseName}_i`)) return item.recipe
+
+          const combinedRecipe: Record<string, number> = {}
+
+          for (let i = 0; i < targetTier; i++) {
+            const currentTierStr = tiers[i]
+            const currentId = `${baseName}_${currentTierStr}`
+            const currentItem = itemMap.get(currentId)
+
+            if (!currentItem) continue
+
+            const costs = i === 0 ? currentItem.recipe : currentItem.upgradeCost
+
+            if (costs) {
+              Object.entries(costs).forEach(([key, val]) => {
+                combinedRecipe[key] = (combinedRecipe[key] || 0) + (val as number)
+              })
+            }
+          }
+
+          return combinedRecipe
+        }
+
+        const lookup: Record<string, Item> = {}
+        normalizedItems.forEach((item: any) => {
+          lookup[item.id] = {
+            id: item.id,
+            name: item.name?.en || item.id,
+            category: item.type || 'Material',
+            icon: item.imageFilename || '📦',
+            isImage: !!item.imageFilename,
+            recipe: resolveRecipe(item),
+          }
+        })
+        setAllItemData(lookup)
+
+        const processedItems = normalizedItems
           .filter((item: any) => {
             const validTypes = ['Augment', 'Shield', 'Ammunition', 'Modification', 'Quick Use']
             const hasValidType = validTypes.includes(item.type)
@@ -107,6 +163,7 @@ function App() {
               category: category,
               icon: item.imageFilename || '📦',
               isImage: !!item.imageFilename,
+              recipe: resolveRecipe(item),
             }
           })
 
@@ -201,9 +258,7 @@ function App() {
     if (!canEquip(item.category, targetSection)) return
 
     // Remove from source
-    if (sourceSection === 'inventory') {
-      setInventoryItems((prev) => prev.filter((i) => i.id !== item.id))
-    } else {
+    if (sourceSection !== 'inventory') {
       setLoadout((prev) => {
         const newLoadout = { ...prev }
         if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection as keyof LoadoutState])) {
@@ -226,10 +281,6 @@ function App() {
       } else {
         existingItem = newLoadout[targetSection] as Item | null
         ;(newLoadout[targetSection] as any) = item
-      }
-
-      if (existingItem) {
-        setInventoryItems((inv) => [...inv, existingItem!])
       }
 
       return newLoadout
@@ -256,7 +307,6 @@ function App() {
         }
         return newLoadout
       })
-      setInventoryItems((prev) => [...prev, item])
     }
     setDraggedItem(null)
     setDropValidity(null)
@@ -277,10 +327,41 @@ function App() {
           ;(newLoadout[section] as any) = null
         }
 
-        if (item) setInventoryItems((inv) => [...inv, item!])
         return newLoadout
       })
     }
+  }
+
+  const getLootTable = () => {
+    const totals: Record<string, number> = {}
+
+    const addItemRecipe = (item: Item | null) => {
+      if (!item || !item.recipe) return
+      Object.entries(item.recipe).forEach(([id, count]) => {
+        totals[id] = (totals[id] || 0) + count
+      })
+    }
+
+    addItemRecipe(loadout.augment)
+    addItemRecipe(loadout.shield)
+    loadout.weapons.forEach(addItemRecipe)
+    loadout.backpack.forEach(addItemRecipe)
+    loadout.quickUse.forEach(addItemRecipe)
+    loadout.extra.forEach(addItemRecipe)
+    loadout.safePocket.forEach(addItemRecipe)
+
+    return Object.entries(totals)
+      .map(([id, count]) => {
+        const item = allItemData[id]
+        return {
+          id,
+          count,
+          name: item?.name || id,
+          icon: item?.icon || '📦',
+          isImage: item?.isImage || false,
+        }
+      })
+      .sort((a, b) => b.count - a.count)
   }
 
   const renderSlot = (section: keyof LoadoutState, index: number = -1, className: string) => {
@@ -423,8 +504,15 @@ function App() {
         </div>
         <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver}>
           <div className="panel-title-row">
-            <h1 className="panel-title">LOADOUT</h1>
-            <h2 className="panel-subtitle">Subtitle</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h1 className="panel-title">LOADOUT</h1>
+                <h2 className="panel-subtitle">Subtitle</h2>
+              </div>
+              <button className="loot-btn" onClick={() => setShowLootTable(true)}>
+                📋 LOOT LIST
+              </button>
+            </div>
           </div>
           <div className="content-grid">
             <div className="column-left">
@@ -492,6 +580,33 @@ function App() {
         >
           {draggedItem.isImage ? <img src={draggedItem.icon} alt={draggedItem.name} /> : <span className="slot-item-text">{draggedItem.icon}</span>}
           <span className="slot-item-name">{draggedItem.name}</span>
+        </div>
+      )}
+
+      {showLootTable && (
+        <div className="loot-overlay" onClick={() => setShowLootTable(false)}>
+          <div className="loot-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="loot-header">
+              <h3 className="loot-title">REQUIRED LOOT</h3>
+              <button className="close-btn" onClick={() => setShowLootTable(false)}>
+                ×
+              </button>
+            </div>
+            <div className="loot-list">
+              {getLootTable().map((item) => (
+                <div key={item.id} className="loot-item">
+                  <span className="loot-count">{item.count}</span>
+                  <div className="loot-icon">
+                    {item.isImage ? <img src={item.icon} alt={item.name} /> : item.icon}
+                  </div>
+                  <span className="loot-name">{item.name}</span>
+                </div>
+              ))}
+              {getLootTable().length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>No craftable items in loadout</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
