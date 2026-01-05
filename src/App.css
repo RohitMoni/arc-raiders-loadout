@@ -237,6 +237,36 @@
   color: #eee;
 }
 
+.tier-selector {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.tier-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #888;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  min-width: 24px;
+  transition: all 0.1s;
+}
+
+.tier-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.tier-btn.active {
+  background: #ffb700;
+  color: #0d101c;
+  border-color: #ffb700;
+}
+
 .item-category {
   font-size: 11px;
   color: #888;

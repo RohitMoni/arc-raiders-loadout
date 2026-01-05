@@ -39,6 +39,7 @@ interface Item {
   icon: string
   isImage: boolean
   recipe?: Record<string, number>
+  variants?: Item[]
 }
 
 interface LoadoutState {
@@ -60,6 +61,7 @@ function App() {
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
   const [allItemData, setAllItemData] = useState<Record<string, Item>>({})
   const [showLootTable, setShowLootTable] = useState(false)
+  const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
@@ -167,7 +169,33 @@ function App() {
             }
           })
 
-        setInventoryItems(processedItems)
+        // Group items by base name (e.g. anvil_i, anvil_ii -> anvil)
+        const groupedItems: Record<string, Item[]> = {}
+        processedItems.forEach((item: Item) => {
+          const match = item.id.match(/^(.+)_(i|ii|iii|iv|v)$/)
+          const baseName = match ? match[1] : item.id
+          if (!groupedItems[baseName]) groupedItems[baseName] = []
+          groupedItems[baseName].push(item)
+        })
+
+        const finalInventoryItems: Item[] = Object.values(groupedItems)
+          .map((group) => {
+            if (group.length === 1) return group[0]
+
+            // Sort by tier (i, ii, iii...)
+            const tiers = ['i', 'ii', 'iii', 'iv', 'v']
+            const getTierIndex = (id: string) => {
+              const m = id.match(/_([iv]+)$/)
+              return m ? tiers.indexOf(m[1]) : -1
+            }
+            group.sort((a, b) => getTierIndex(a.id) - getTierIndex(b.id))
+
+            // Return the first item (Tier 1) as the base, with variants attached
+            return { ...group[0], variants: group }
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+
+        setInventoryItems(finalInventoryItems)
       } catch (error) {
         console.error('Failed to fetch inventory:', error)
       }
@@ -478,26 +506,51 @@ function App() {
                 onChange={(e) => setSearch(e.target.value)}
               />
               <div className="inventory-list">
-                {filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="inventory-item-row"
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, item, 'inventory')}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <div className="item-icon-placeholder">
-                      {item.isImage ? (
-                        <img src={item.icon} alt={item.name} className="item-icon-image" />
-                      ) : (
-                        item.icon
+                {filteredItems.map((item) => {
+                  const selectedId = selectedVariantMap[item.id]
+                  const activeItem =
+                    selectedId && item.variants
+                      ? item.variants.find((v) => v.id === selectedId) || item
+                      : item
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="inventory-item-row"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, activeItem, 'inventory')}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <div className="item-icon-placeholder">
+                        {activeItem.isImage ? (
+                          <img src={activeItem.icon} alt={activeItem.name} className="item-icon-image" />
+                        ) : (
+                          activeItem.icon
+                        )}
+                      </div>
+                      <div className="item-info">
+                        <span className="item-name">{activeItem.name}</span>
+                      </div>
+                      {item.variants && item.variants.length > 1 && (
+                        <div className="tier-selector">
+                          {item.variants.map((v, idx) => (
+                            <button
+                              key={v.id}
+                              className={`tier-btn ${activeItem.id === v.id ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedVariantMap((prev) => ({ ...prev, [item.id]: v.id }))
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              {['I', 'II', 'III', 'IV', 'V'][idx] || idx + 1}
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <div className="item-info">
-                      <span className="item-name">{item.name}</span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>
