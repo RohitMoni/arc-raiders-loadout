@@ -39,12 +39,14 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   line-height: 1.25;
+  user-select: none;
 }
 
 .panel-subtitle {
   margin: 0;
   font-size: 16px;
   font-weight: 400;
+  user-select: none;
 }
 
 .content-grid {
@@ -62,6 +64,7 @@
   color: #ddd;
   letter-spacing: 0.05em;
   flex: none;
+  user-select: none;
 }
 
 .column-left, .column-middle, .column-right {
@@ -438,6 +441,7 @@
   font-size: 20px;
   font-weight: 700;
   color: white;
+  user-select: none;
 }
 
 .close-btn {
