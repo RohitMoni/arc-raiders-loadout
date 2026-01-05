@@ -1,4 +1,4 @@
-import { useState, useEffect, DragEvent, MouseEvent, useRef } from 'react'
+import { useState, useEffect, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
@@ -40,6 +40,8 @@ interface Item {
   isImage: boolean
   recipe?: Record<string, number>
   variants?: Item[]
+  stackSize?: number
+  count?: number
 }
 
 interface LoadoutState {
@@ -65,6 +67,7 @@ function App() {
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
+  const [dragSource, setDragSource] = useState<{ section: string; index?: number; isSplit: boolean } | null>(null)
   const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
     augment: null,
@@ -141,6 +144,7 @@ function App() {
             icon: item.imageFilename || '📦',
             isImage: !!item.imageFilename,
             recipe: resolveRecipe(item),
+            stackSize: item.stackSize,
           }
         })
         setAllItemData(lookup)
@@ -166,6 +170,7 @@ function App() {
               icon: item.imageFilename || '📦',
               isImage: !!item.imageFilename,
               recipe: resolveRecipe(item),
+              stackSize: item.stackSize,
             }
           })
 
@@ -225,8 +230,24 @@ function App() {
   })
 
   const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
-    e.dataTransfer.setData('application/json', JSON.stringify({ item, sourceSection, sourceIndex }))
-    setDraggedItem(item)
+    let dragItem = { ...item }
+    let isSplit = false
+
+    if (sourceSection === 'inventory' && item.stackSize) {
+      dragItem.count = item.stackSize
+    } else if (sourceSection !== 'inventory' && e.altKey && item.stackSize && (item.count || 1) > 1) {
+      const total = item.count || 1
+      const split = Math.floor(total / 2)
+      dragItem.count = split
+      isSplit = true
+    } else if (sourceSection !== 'inventory' && !dragItem.count) {
+      dragItem.count = 1
+    }
+
+    setDragSource({ section: sourceSection, index: sourceIndex, isSplit })
+
+    e.dataTransfer.setData('application/json', JSON.stringify({ item: dragItem, sourceSection, sourceIndex, isSplit }))
+    setDraggedItem(dragItem)
     e.dataTransfer.effectAllowed = 'move'
 
     // Hide default drag image
@@ -237,6 +258,7 @@ function App() {
     setDraggedItem(null)
     setDropValidity(null)
     setActiveSlot(null)
+    setDragSource(null)
   }
 
   const handleDragOver = (e: DragEvent) => {
@@ -280,35 +302,67 @@ function App() {
     e.stopPropagation()
     const data = e.dataTransfer.getData('application/json')
     if (!data) return
-
-    const { item, sourceSection, sourceIndex } = JSON.parse(data) as { item: Item, sourceSection: string, sourceIndex?: number }
+    const { item, sourceSection, sourceIndex, isSplit } = JSON.parse(data) as {
+      item: Item
+      sourceSection: string
+      sourceIndex?: number
+      isSplit: boolean
+    }
 
     if (!canEquip(item.category, targetSection)) return
 
-    // Remove from source
-    if (sourceSection !== 'inventory') {
-      setLoadout((prev) => {
-        const newLoadout = { ...prev }
-        if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection as keyof LoadoutState])) {
-          (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = null
-        } else {
-          (newLoadout[sourceSection as keyof LoadoutState] as any) = null
-        }
-        return newLoadout
-      })
-    }
-
-    // Handle target existing item (swap/return to inventory)
     setLoadout((prev) => {
       const newLoadout = { ...prev }
-      let existingItem: Item | null = null
 
-      if (targetIndex !== -1 && Array.isArray(newLoadout[targetSection])) {
-        existingItem = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
-        ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = item
+      const getItem = (sec: keyof LoadoutState, idx: number) => {
+        if (idx !== -1 && Array.isArray(newLoadout[sec])) return (newLoadout[sec] as (Item | null)[])[idx]
+        return newLoadout[sec] as Item | null
+      }
+
+      const setItem = (sec: keyof LoadoutState, idx: number, val: Item | null) => {
+        if (idx !== -1 && Array.isArray(newLoadout[sec])) {
+          if (newLoadout[sec] === prev[sec]) {
+            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+          }
+          ;(newLoadout[sec] as (Item | null)[])[idx] = val
+        } else {
+          ;(newLoadout[sec] as any) = val
+        }
+      }
+
+      const targetItem = getItem(targetSection, targetIndex)
+      let amountToMove = item.count || 1
+      let newTargetItem = { ...item }
+
+      // Merge logic
+      if (targetItem && targetItem.id === item.id && targetItem.stackSize) {
+        const space = targetItem.stackSize - (targetItem.count || 1)
+        amountToMove = Math.min(amountToMove, space)
+        newTargetItem = { ...targetItem, count: (targetItem.count || 1) + amountToMove }
       } else {
-        existingItem = newLoadout[targetSection] as Item | null
-        ;(newLoadout[targetSection] as any) = item
+        if (targetItem && isSplit) return prev // Cannot swap on split
+        newTargetItem = { ...item, count: amountToMove }
+      }
+
+      if (amountToMove === 0) return prev
+
+      setItem(targetSection, targetIndex, newTargetItem)
+
+      // Update Source
+      if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
+        const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+        if (targetItem && targetItem.id !== item.id && !isSplit) {
+          // Swap
+          setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
+        } else {
+          const currentSourceCount = sourceItem?.count || 1
+          const remaining = currentSourceCount - amountToMove
+          setItem(
+            sourceSection as keyof LoadoutState,
+            sourceIndex,
+            remaining > 0 ? { ...sourceItem!, count: remaining } : null
+          )
+        }
       }
 
       return newLoadout
@@ -316,22 +370,38 @@ function App() {
     setDraggedItem(null)
     setDropValidity(null)
     setActiveSlot(null)
+    setDragSource(null)
   }
 
   const handleAppDrop = (e: DragEvent) => {
     e.preventDefault()
     const data = e.dataTransfer.getData('application/json')
     if (!data) return
-    const { item, sourceSection, sourceIndex } = JSON.parse(data) as { item: Item, sourceSection: string, sourceIndex?: number }
+    const { item, sourceSection, sourceIndex } = JSON.parse(data) as {
+      item: Item
+      sourceSection: string
+      sourceIndex?: number
+    }
 
-    if (sourceSection !== 'inventory') {
-      // Remove from loadout and add back to inventory
+    if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
       setLoadout((prev) => {
         const newLoadout = { ...prev }
-        if (sourceIndex !== undefined && sourceIndex !== -1 && Array.isArray(newLoadout[sourceSection as keyof LoadoutState])) {
-          (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = null
+        const sec = sourceSection as keyof LoadoutState
+        const getItem = () =>
+          sourceIndex !== -1 && Array.isArray(newLoadout[sec])
+            ? (newLoadout[sec] as (Item | null)[])[sourceIndex]
+            : (newLoadout[sec] as Item | null)
+
+        const sourceItem = getItem()
+        const remaining = (sourceItem?.count || 1) - (item.count || 1)
+
+        if (sourceIndex !== -1 && Array.isArray(newLoadout[sec])) {
+          if (newLoadout[sec] === prev[sec]) {
+            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+          }
+          ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = remaining > 0 ? { ...sourceItem!, count: remaining } : null
         } else {
-          (newLoadout[sourceSection as keyof LoadoutState] as any) = null
+          ;(newLoadout[sec] as any) = remaining > 0 ? { ...sourceItem!, count: remaining } : null
         }
         return newLoadout
       })
@@ -339,6 +409,7 @@ function App() {
     setDraggedItem(null)
     setDropValidity(null)
     setActiveSlot(null)
+    setDragSource(null)
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
@@ -348,6 +419,9 @@ function App() {
         const newLoadout = { ...prev }
         let item: Item | null = null
         if (index !== -1 && Array.isArray(newLoadout[section])) {
+          if (newLoadout[section] === prev[section]) {
+            ;(newLoadout[section] as any) = [...(prev[section] as any[])]
+          }
           item = (newLoadout[section] as (Item | null)[])[index]
           ;(newLoadout[section] as (Item | null)[])[index] = null
         } else {
@@ -366,7 +440,7 @@ function App() {
     const addItemRecipe = (item: Item | null) => {
       if (!item || !item.recipe) return
       Object.entries(item.recipe).forEach(([id, count]) => {
-        totals[id] = (totals[id] || 0) + count
+        totals[id] = (totals[id] || 0) + count * (item.count || 1)
       })
     }
 
@@ -399,6 +473,38 @@ function App() {
     const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
     const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index
 
+    let displayItem = item
+    if (dragSource && dragSource.section === section && dragSource.index === index && dragSource.isSplit && item && draggedItem) {
+      const remainder = (item.count || 1) - (draggedItem.count || 1)
+      displayItem = { ...item, count: remainder }
+    }
+
+    const handleCountChange = (e: ChangeEvent<HTMLInputElement>, currentItem: Item) => {
+      const val = parseInt(e.target.value)
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        const update = (newItem: Item | null) => {
+          if (index !== -1 && Array.isArray(newLoadout[section])) {
+            if (newLoadout[section] === prev[section]) {
+              ;(newLoadout[section] as any) = [...(prev[section] as any[])]
+            }
+            ;(newLoadout[section] as (Item | null)[])[index] = newItem
+          } else {
+            ;(newLoadout[section] as any) = newItem
+          }
+        }
+
+        if (isNaN(val) || val <= 0) {
+          update(null)
+        } else if (currentItem.stackSize && val > currentItem.stackSize) {
+          update({ ...currentItem, count: currentItem.stackSize })
+        } else {
+          update({ ...currentItem, count: val })
+        }
+        return newLoadout
+      })
+    }
+
     return (
       <div
         className={`${className} ${dropClass} ${isActiveSlot ? 'active-slot' : ''}`}
@@ -415,10 +521,21 @@ function App() {
         onDrop={(e) => handleSlotDrop(e, section, index)}
         onClick={(e) => handleSlotClick(e, section, index)}
       >
-        {item && (
-          <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, item, section, index)} onDragEnd={handleDragEnd}>
-            {item.isImage ? <img src={item.icon} alt={item.name} draggable={false} /> : <span className="slot-item-text">{item.icon}</span>}
-            <span className="slot-item-name">{item.name}</span>
+        {displayItem && (
+          <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, displayItem, section, index)} onDragEnd={handleDragEnd}>
+            {displayItem.isImage ? <img src={displayItem.icon} alt={displayItem.name} draggable={false} /> : <span className="slot-item-text">{displayItem.icon}</span>}
+            <span className="slot-item-name">{displayItem.name}</span>
+            {displayItem.stackSize && (
+              <input
+                className="slot-count-input"
+                value={displayItem.count || 1}
+                onChange={(e) => handleCountChange(e, displayItem)}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                type="number"
+                min="1"
+              />
+            )}
           </div>
         )}
         {isDragging && !isValid && <div className="slot-invalid-overlay">🚫</div>}
@@ -633,6 +750,11 @@ function App() {
         >
           {draggedItem.isImage ? <img src={draggedItem.icon} alt={draggedItem.name} /> : <span className="slot-item-text">{draggedItem.icon}</span>}
           <span className="slot-item-name">{draggedItem.name}</span>
+          {draggedItem.stackSize && (
+            <span style={{ position: 'absolute', top: 5, right: 5, color: 'white', fontWeight: 'bold', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px' }}>
+              {draggedItem.count || 1}
+            </span>
+          )}
         </div>
       )}
 
