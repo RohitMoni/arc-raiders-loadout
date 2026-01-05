@@ -66,6 +66,8 @@ function App() {
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
+  const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
   const [dragSource, setDragSource] = useState<{ section: string; index?: number; isSplit: boolean } | null>(null)
   const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
@@ -244,6 +246,16 @@ function App() {
       dragItem.count = 1
     }
 
+    // Calculate slot centers for latching
+    slotCenters.current.clear()
+    slotRefs.current.forEach((el, key) => {
+      const rect = el.getBoundingClientRect()
+      slotCenters.current.set(key, {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      })
+    })
+
     setDragSource({ section: sourceSection, index: sourceIndex, isSplit })
 
     e.dataTransfer.setData('application/json', JSON.stringify({ item: dragItem, sourceSection, sourceIndex, isSplit }))
@@ -268,11 +280,43 @@ function App() {
   }
 
   const handleLoadoutPanelDragOver = (e: DragEvent) => {
+    e.preventDefault()
     e.stopPropagation()
-    // We do NOT preventDefault here. This ensures that dropping on the loadout panel background
-    // does not trigger the "remove" drop on the app-container, nor does it allow a drop itself.
-    if (activeSlot) setActiveSlot(null)
-    if (dropValidity !== null) setDropValidity(null)
+    if (!draggedItem) return
+
+    let closestKey: string | null = null
+    let minDistance = Infinity
+    const threshold = 80 // px
+
+    slotCenters.current.forEach((center, key) => {
+      const dist = Math.sqrt(Math.pow(e.clientX - center.x, 2) + Math.pow(e.clientY - center.y, 2))
+      if (dist < minDistance) {
+        minDistance = dist
+        closestKey = key
+      }
+    })
+
+    if (closestKey && minDistance < threshold) {
+      const [section, indexStr] = (closestKey as string).split('|')
+      const index = parseInt(indexStr)
+
+      if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index) {
+        const isValid = canEquip(draggedItem.category, section)
+        setActiveSlot({ section: section as keyof LoadoutState, index })
+        setDropValidity(isValid ? 'valid' : 'invalid')
+      }
+    } else {
+      if (activeSlot) setActiveSlot(null)
+      if (dropValidity !== null) setDropValidity(null)
+    }
+  }
+
+  const handleLoadoutPanelDrop = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (activeSlot) {
+      handleSlotDrop(e, activeSlot.section, activeSlot.index)
+    }
   }
 
   const handleGlobalDragOverCapture = (e: DragEvent) => {
@@ -507,6 +551,11 @@ function App() {
 
     return (
       <div
+        ref={(el) => {
+          const key = `${section}|${index}`
+          if (el) slotRefs.current.set(key, el)
+          else slotRefs.current.delete(key)
+        }}
         className={`${className} ${dropClass} ${isActiveSlot ? 'active-slot' : ''}`}
         style={{ position: 'relative' }}
         onDragOver={(e) => {
@@ -672,7 +721,7 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver}>
+        <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver} onDrop={handleLoadoutPanelDrop}>
           <div className="panel-title-row">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
