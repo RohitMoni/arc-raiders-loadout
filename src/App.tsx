@@ -461,15 +461,12 @@ function App() {
       e.preventDefault()
       setLoadout((prev) => {
         const newLoadout = { ...prev }
-        let item: Item | null = null
         if (index !== -1 && Array.isArray(newLoadout[section])) {
           if (newLoadout[section] === prev[section]) {
             ;(newLoadout[section] as any) = [...(prev[section] as any[])]
           }
-          item = (newLoadout[section] as (Item | null)[])[index]
           ;(newLoadout[section] as (Item | null)[])[index] = null
         } else {
-          item = newLoadout[section] as Item | null
           ;(newLoadout[section] as any) = null
         }
 
