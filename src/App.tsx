@@ -81,7 +81,7 @@ emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAA
 const DEFAULT_SLOTS = {
   backpack: 16,
   quickUse: 3,
-  safePocket: 3,
+  safePocket: 0,
 }
 const EXTRA_SLOT_TYPES = [
   'trinket',
@@ -282,8 +282,8 @@ function App() {
     const augment = loadout.augment
     const newSlotConfig = {
       backpack: augment?.slots?.backpack ?? DEFAULT_SLOTS.backpack,
-      quickUse: augment?.slots?.quickUse ?? DEFAULT_SLOTS.quickUse,
-      safePocket: augment?.slots?.safePocket ?? DEFAULT_SLOTS.safePocket,
+      quickUse: augment?.slots?.quick_use ?? DEFAULT_SLOTS.quickUse,
+      safePocket: augment?.slots?.safe_pocket ?? DEFAULT_SLOTS.safePocket,
     }
 
     const resizeSection = (currentItems: (Item | null)[], newSize: number): (Item | null)[] => {
@@ -1176,8 +1176,8 @@ function App() {
                   ))}
                 </div>
 
-                <h3 className="section-title">SAFE POCKET</h3>
-                <div className="safe-pocket-grid">
+                <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
+                <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
                   {loadout.safePocket.map((_, i) => (
                     <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
                   ))}
