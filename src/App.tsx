@@ -240,6 +240,7 @@ function App() {
   })
 
   const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
+    console.log('[DragStart] Item:', item.name, 'Category:', item.category, 'Source:', sourceSection, 'Index:', sourceIndex)
     let dragItem = { ...item }
     let isSplit = false
 
@@ -266,7 +267,10 @@ function App() {
 
     setDragSource({ section: sourceSection, index: sourceIndex, isSplit })
 
-    e.dataTransfer.setData('application/json', JSON.stringify({ item: dragItem, sourceSection, sourceIndex, isSplit }))
+    const json = JSON.stringify({ item: dragItem, sourceSection, sourceIndex, isSplit })
+    e.dataTransfer.setData('application/json', json)
+    e.dataTransfer.setData('text/plain', json)
+    
     setDraggedItem(dragItem)
     e.dataTransfer.effectAllowed = 'move'
 
@@ -310,20 +314,27 @@ function App() {
 
       if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index) {
         const isValid = canEquip(draggedItem.category, section)
+        console.log('[DragOver] New Active Slot:', section, index, 'Valid:', isValid)
         setActiveSlot({ section: section as keyof LoadoutState, index })
         setDropValidity(isValid ? 'valid' : 'invalid')
       }
     } else {
-      if (activeSlot) setActiveSlot(null)
+      if (activeSlot) {
+        console.log('[DragOver] Clearing Active Slot')
+        setActiveSlot(null)
+      }
       if (dropValidity !== null) setDropValidity(null)
     }
   }
 
   const handleLoadoutPanelDrop = (e: DragEvent) => {
+    console.log('[PanelDrop] Drop on panel. ActiveSlot:', activeSlot)
     e.preventDefault()
     e.stopPropagation()
     if (activeSlot) {
       handleSlotDrop(e, activeSlot.section, activeSlot.index)
+    } else {
+      console.log('[PanelDrop] No active slot to drop into.')
     }
   }
 
@@ -341,29 +352,57 @@ function App() {
       case 'Augment': return slotType === 'augment'
       case 'Shield': return slotType === 'shield' || slotType === 'backpack' || slotType === 'safePocket'
       case 'Weapon': return slotType === 'weapons' || slotType === 'backpack'
-      case 'Ammunition': return slotType === 'backpack' || slotType === 'safePocket'
-      case 'Mod': return slotType === 'backpack' || slotType === 'safePocket'
-      case 'Quick Use': return slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket'
-      case 'Key': return slotType === 'backpack' || slotType === 'safePocket'
+      case 'Ammunition': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
+      case 'Mod': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
+      case 'Quick Use': return slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket' || slotType === 'extra'
+      case 'Key': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
       default: return false
     }
   }
 
   const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1) => {
+    console.log('[SlotDrop] Target:', targetSection, targetIndex)
     e.preventDefault()
     e.stopPropagation()
-    const data = e.dataTransfer.getData('application/json')
-    if (!data) return
-    const { item, sourceSection, sourceIndex, isSplit } = JSON.parse(data) as {
-      item: Item
-      sourceSection: string
-      sourceIndex?: number
-      isSplit: boolean
+
+    console.log('[SlotDrop] Data types available:', e.dataTransfer.types)
+
+    let dropData: { item: Item; sourceSection: string; sourceIndex?: number; isSplit: boolean } | null = null
+
+    const jsonString = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain')
+    if (jsonString) {
+      try {
+        dropData = JSON.parse(jsonString)
+      } catch (err) {
+        console.error('[SlotDrop] Failed to parse JSON data', err)
+      }
     }
+
+    if (!dropData && draggedItem && dragSource) {
+      console.log('[SlotDrop] Using internal React state for drop data.')
+      dropData = {
+        item: draggedItem,
+        sourceSection: dragSource.section,
+        sourceIndex: dragSource.index,
+        isSplit: dragSource.isSplit
+      }
+    }
+
+    if (!dropData) {
+      console.error('[SlotDrop] Failed: No data found in dataTransfer OR internal state')
+      return
+    }
+
+    const { item, sourceSection, sourceIndex, isSplit } = dropData
+
+    console.log('[SlotDrop] Dropped Item:', item.name, 'Category:', item.category)
 
     if (sourceSection === targetSection && sourceIndex === targetIndex) return
 
-    if (!canEquip(item.category, targetSection)) return
+    if (!canEquip(item.category, targetSection)) {
+      console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category, 'for slot', targetSection)
+      return
+    }
 
     setLoadout((prev) => {
       const newLoadout = { ...prev }
@@ -428,14 +467,22 @@ function App() {
   }
 
   const handleAppDrop = (e: DragEvent) => {
+    console.log('[AppDrop] Handle global drop (potential unequip)')
     e.preventDefault()
-    const data = e.dataTransfer.getData('application/json')
-    if (!data) return
-    const { item, sourceSection, sourceIndex } = JSON.parse(data) as {
-      item: Item
-      sourceSection: string
-      sourceIndex?: number
+    
+    let dropData: { item: Item; sourceSection: string; sourceIndex?: number } | null = null
+    const jsonString = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain')
+    
+    if (jsonString) {
+       try { dropData = JSON.parse(jsonString) } catch (e) { console.error(e) }
     }
+    
+    if (!dropData && draggedItem && dragSource) {
+        dropData = { item: draggedItem, sourceSection: dragSource.section, sourceIndex: dragSource.index }
+    }
+
+    if (!dropData) return
+    const { item, sourceSection, sourceIndex } = dropData
 
     if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
       setLoadout((prev) => {
@@ -467,7 +514,9 @@ function App() {
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
+    console.log('[SlotClick] Section:', section, 'Index:', index, 'Shift:', e.shiftKey)
     if (e.shiftKey) {
+      console.log('[SlotClick] Unequipping item via Shift+Click')
       e.preventDefault()
       setLoadout((prev) => {
         const newLoadout = { ...prev }
@@ -604,7 +653,10 @@ function App() {
             setActiveSlot({ section, index })
           }
         }}
-        onDrop={(e) => handleSlotDrop(e, section, index)}
+        onDrop={(e) => {
+          console.log('[SlotRender] onDrop triggered for', section, index)
+          handleSlotDrop(e, section, index)
+        }}
         onClick={(e) => handleSlotClick(e, section, index)}
       >
         {displayItem && (
@@ -771,6 +823,7 @@ function App() {
                               className={`tier-btn ${activeItem.id === v.id ? 'active' : ''}`}
                               onClick={(e) => {
                                 e.stopPropagation()
+                                console.log('[Inventory] Selected Variant:', v.id, 'for item:', item.id)
                                 setSelectedVariantMap((prev) => ({ ...prev, [item.id]: v.id }))
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
