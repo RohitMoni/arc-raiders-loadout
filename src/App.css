@@ -31,6 +31,27 @@
   padding: 32px 32px 0 32px;
   width: 100%;
   box-sizing: border-box;
+  display: flex; /* Use flexbox */
+  justify-content: space-between; /* Space out children */
+  align-items: center; /* Vertically align items */
+}
+
+.reload-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #888;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reload-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .panel-title {
@@ -286,6 +307,7 @@
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column; /* Ensure vertical centering */
   align-items: center;
   justify-content: center;
   cursor: grab;
@@ -324,6 +346,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+  opacity: 0; /* Hide by default */
+  transition: opacity 0.2s ease-in-out;
+}
+
+.slot-item:hover .slot-item-name {
+  opacity: 1; /* Show on hover */
+}
+
+/* Styles for the dragged item ghost to ensure name is visible on ghost */
+.dragged-item-ghost .slot-item-name {
+  opacity: 1;
 }
 
 .slot-invalid-overlay {
@@ -380,6 +413,16 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   padding: 3px;
+}
+
+.dragged-item-ghost {
+  position: fixed;
+  width: 130px;
+  height: 130px;
+  pointer-events: none;
+  z-index: 1000;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .loot-btn {
@@ -548,3 +591,14 @@
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* Rarity Colors */
+.inventory-item-row.rarity-uncommon { border-left: 3px solid #1eff00; }
+.inventory-item-row.rarity-rare { border-left: 3px solid #0080ff; }
+.inventory-item-row.rarity-epic { border-left: 3px solid #cc00ff; }
+.inventory-item-row.rarity-legendary { border-left: 3px solid #ffcc00; }
+
+.slot-item.rarity-uncommon { box-shadow: inset 0 0 0 2px #1eff00; }
+.slot-item.rarity-rare { box-shadow: inset 0 0 0 2px #0080ff; }
+.slot-item.rarity-epic { box-shadow: inset 0 0 0 2px #cc00ff; }
+.slot-item.rarity-legendary { box-shadow: inset 0 0 0 2px #ffcc00; }

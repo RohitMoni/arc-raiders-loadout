@@ -1,4 +1,4 @@
-import { useState, useEffect, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
+import { useState, useEffect, useCallback, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
@@ -36,6 +36,7 @@ interface Item {
   id: string
   name: string
   category: string
+  rarity: string
   icon: string
   isImage: boolean
   recipe?: Record<string, number>
@@ -58,158 +59,316 @@ const emptyImg = new Image()
 emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
 function App() {
+
   const [search, setSearch] = useState('')
+
   const [activeFilter, setActiveFilter] = useState('all')
+
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
+
   const [allItemData, setAllItemData] = useState<Record<string, Item>>({})
+
   const [showLootTable, setShowLootTable] = useState(false)
+
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
+
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
+
   const ghostRef = useRef<HTMLDivElement>(null)
+
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
+
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
+
   const [dragSource, setDragSource] = useState<{ section: string; index?: number; isSplit: boolean } | null>(null)
+
   const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
+
   const [loadout, setLoadout] = useState<LoadoutState>({
+
     augment: null,
+
     shield: null,
+
     weapons: [null, null],
+
     backpack: Array(24).fill(null),
+
     quickUse: Array(4).fill(null),
+
     extra: Array(3).fill(null),
+
     safePocket: Array(3).fill(null),
+
   })
 
-  useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        const response = await fetch('https://api.github.com/repos/RaidTheory/arcraiders-data/contents/items')
-        const files = await response.json()
 
-        const itemPromises = files
-          .filter((file: any) => file.name.endsWith('.json'))
-          .map(async (file: any) => {
-            const res = await fetch(file.download_url)
-            const data = await res.json()
-            return { ...data, fileName: file.name }
-          })
 
-        const rawItems = await Promise.all(itemPromises)
+  const fetchInventory = useCallback(async () => {
 
-        const normalizedItems = rawItems.map((item: any) => ({
-          ...item,
-          id: item.id || item.fileName.replace('.json', ''),
-        }))
+    try {
 
-        const itemMap = new Map(normalizedItems.map((item: any) => [item.id, item]))
+      const response = await fetch('https://api.github.com/repos/RohitMoni/arc-raiders-data/contents/items')
 
-        const resolveRecipe = (item: any) => {
-          const id = item.id
-          const match = id.match(/^(.+)_(i|ii|iii|iv|v)$/)
-          if (!match) return item.recipe
+      const files = await response.json()
 
-          const baseName = match[1]
-          const tierStr = match[2]
-          const tiers = ['i', 'ii', 'iii', 'iv', 'v']
-          const targetTier = tiers.indexOf(tierStr) + 1
 
-          if (!itemMap.has(`${baseName}_i`)) return item.recipe
 
-          const combinedRecipe: Record<string, number> = {}
+      const itemPromises = files
 
-          for (let i = 0; i < targetTier; i++) {
-            const currentTierStr = tiers[i]
-            const currentId = `${baseName}_${currentTierStr}`
-            const currentItem = itemMap.get(currentId)
+        .filter((file: any) => file.name.endsWith('.json'))
 
-            if (!currentItem) continue
+        .map(async (file: any) => {
 
-            const costs = i === 0 ? currentItem.recipe : currentItem.upgradeCost
+          const res = await fetch(file.download_url)
 
-            if (costs) {
-              Object.entries(costs).forEach(([key, val]) => {
-                combinedRecipe[key] = (combinedRecipe[key] || 0) + (val as number)
-              })
-            }
+          const data = await res.json()
+
+          return { ...data, fileName: file.name }
+
+        })
+
+
+
+      const rawItems = await Promise.all(itemPromises)
+
+
+
+      const normalizedItems = rawItems.map((item: any) => ({
+
+        ...item,
+
+        id: item.id || item.fileName.replace('.json', ''),
+
+      }))
+
+
+
+      const itemMap = new Map(normalizedItems.map((item: any) => [item.id, item]))
+
+
+
+      const resolveRecipe = (item: any) => {
+
+        const id = item.id
+
+        const match = id.match(/^(.+)_(i|ii|iii|iv|v)$/)
+
+        if (!match) return item.recipe
+
+
+
+        const baseName = match[1]
+
+        const tierStr = match[2]
+
+        const tiers = ['i', 'ii', 'iii', 'iv', 'v']
+
+        const targetTier = tiers.indexOf(tierStr) + 1
+
+
+
+        if (!itemMap.has(`${baseName}_i`)) return item.recipe
+
+
+
+        const combinedRecipe: Record<string, number> = {}
+
+
+
+        for (let i = 0; i < targetTier; i++) {
+
+          const currentTierStr = tiers[i]
+
+          const currentId = `${baseName}_${currentTierStr}`
+
+          const currentItem = itemMap.get(currentId)
+
+
+
+          if (!currentItem) continue
+
+
+
+          const costs = i === 0 ? currentItem.recipe : currentItem.upgradeCost
+
+
+
+          if (costs) {
+
+            Object.entries(costs).forEach(([key, val]) => {
+
+              combinedRecipe[key] = (combinedRecipe[key] || 0) + (val as number)
+
+            })
+
           }
 
-          return combinedRecipe
         }
 
-        const lookup: Record<string, Item> = {}
-        normalizedItems.forEach((item: any) => {
-          lookup[item.id] = {
-            id: item.id,
-            name: item.name?.en || item.id,
-            category: item.type || 'Material',
-            icon: item.imageFilename || '📦',
-            isImage: !!item.imageFilename,
-            recipe: resolveRecipe(item),
-            stackSize: item.stackSize,
-          }
-        })
-        setAllItemData(lookup)
 
-        const processedItems = normalizedItems
-          .filter((item: any) => {
-            const validTypes = ['Augment', 'Shield', 'Ammunition', 'Modification', 'Quick Use']
-            const hasValidType = validTypes.includes(item.type)
-            const isWeapon = item.isWeapon === true
-            const isKey = item.fileName === 'raider_hatch_key.json'
-            return hasValidType || isWeapon || isKey
-          })
-          .map((item: any, index: number) => {
-            let category = item.type
-            if (item.fileName === 'raider_hatch_key.json') category = 'Key'
-            else if (item.isWeapon) category = 'Weapon'
-            else if (item.type === 'Modification') category = 'Mod'
 
-            return {
-              id: item.id || `item-${index}`,
-              name: item.name?.en || item.fileName.replace('.json', ''),
-              category: category,
-              icon: item.imageFilename || '📦',
-              isImage: !!item.imageFilename,
-              recipe: resolveRecipe(item),
-              stackSize: item.stackSize,
-            }
-          })
+        return combinedRecipe
 
-        // Group items by base name (e.g. anvil_i, anvil_ii -> anvil)
-        const groupedItems: Record<string, Item[]> = {}
-        processedItems.forEach((item: Item) => {
-          const match = item.id.match(/^(.+)_(i|ii|iii|iv|v)$/)
-          const baseName = match ? match[1] : item.id
-          if (!groupedItems[baseName]) groupedItems[baseName] = []
-          groupedItems[baseName].push(item)
-        })
-
-        const finalInventoryItems: Item[] = Object.values(groupedItems)
-          .map((group) => {
-            if (group.length === 1) return group[0]
-
-            // Sort by tier (i, ii, iii...)
-            const tiers = ['i', 'ii', 'iii', 'iv', 'v']
-            const getTierIndex = (id: string) => {
-              const m = id.match(/_([iv]+)$/)
-              return m ? tiers.indexOf(m[1]) : -1
-            }
-            group.sort((a, b) => getTierIndex(a.id) - getTierIndex(b.id))
-
-            // Return the first item (Tier 1) as the base, with variants attached
-            return { ...group[0], variants: group }
-          })
-          .sort((a, b) => a.name.localeCompare(b.name))
-
-        setInventoryItems(finalInventoryItems)
-      } catch (error) {
-        console.error('Failed to fetch inventory:', error)
       }
+
+
+
+      const lookup: Record<string, Item> = {}
+
+      normalizedItems.forEach((item: any) => {
+
+        lookup[item.id] = {
+
+          id: item.id,
+
+          name: item.name?.en || item.id,
+
+          category: item.type || 'Material',
+
+          rarity: item.rarity || 'Common',
+
+          icon: item.imageFilename || '📦',
+
+          isImage: !!item.imageFilename,
+
+          recipe: resolveRecipe(item),
+
+          stackSize: item.stackSize,
+
+        }
+
+      })
+
+      setAllItemData(lookup)
+
+
+
+      const processedItems = normalizedItems
+
+        .filter((item: any) => {
+
+          const validTypes = ['Augment', 'Shield', 'Ammunition', 'Modification', 'Quick Use']
+
+          const hasValidType = validTypes.includes(item.type)
+
+          const isWeapon = item.isWeapon === true
+
+          const isKey = item.fileName === 'raider_hatch_key.json'
+
+          return hasValidType || isWeapon || isKey
+
+        })
+
+        .map((item: any, index: number) => {
+
+          let category = item.type
+
+          if (item.fileName === 'raider_hatch_key.json') category = 'Key'
+
+          else if (item.isWeapon) category = 'Weapon'
+
+          else if (item.type === 'Modification') category = 'Mod'
+
+
+
+          return {
+
+            id: item.id || `item-${index}`,
+
+            name: item.name?.en || item.fileName.replace('.json', ''),
+
+            category: category,
+
+            rarity: item.rarity || 'Common',
+
+            icon: item.imageFilename || '📦',
+
+            isImage: !!item.imageFilename,
+
+            recipe: resolveRecipe(item),
+
+            stackSize: item.stackSize,
+
+          }
+
+        })
+
+
+
+      // Group items by base name (e.g. anvil_i, anvil_ii -> anvil)
+
+      const groupedItems: Record<string, Item[]> = {}
+
+      processedItems.forEach((item: Item) => {
+
+        const match = item.id.match(/^(.+)_(i|ii|iii|iv|v)$/)
+
+        const baseName = match ? match[1] : item.id
+
+        if (!groupedItems[baseName]) groupedItems[baseName] = []
+
+        groupedItems[baseName].push(item)
+
+      })
+
+
+
+      const finalInventoryItems: Item[] = Object.values(groupedItems)
+
+        .map((group) => {
+
+          if (group.length === 1) return group[0]
+
+
+
+          // Sort by tier (i, ii, iii...)
+
+          const tiers = ['i', 'ii', 'iii', 'iv', 'v']
+
+          const getTierIndex = (id: string) => {
+
+            const m = id.match(/_([iv]+)$/)
+
+            return m ? tiers.indexOf(m[1]) : -1
+
+          }
+
+          group.sort((a, b) => getTierIndex(a.id) - getTierIndex(b.id))
+
+
+
+          // Return the first item (Tier 1) as the base, with variants attached
+
+          return { ...group[0], variants: group }
+
+        })
+
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+
+
+      setInventoryItems(finalInventoryItems)
+
+    } catch (error) {
+
+      console.error('Failed to fetch inventory:', error)
+
     }
 
+  }, [setInventoryItems, setAllItemData, setSelectedVariantMap])
+
+
+
+  useEffect(() => {
+
     fetchInventory()
-  }, [])
+
+  }, [fetchInventory])
+
+
 
   const filteredItems = inventoryItems.filter((item) => {
     const matchesFilter = activeFilter === 'all' || item.category === activeFilter
@@ -521,7 +680,7 @@ function App() {
     }
 
     const handleCountChange = (e: ChangeEvent<HTMLInputElement>, currentItem: Item) => {
-      const val = parseInt(e.target.value)
+      const rawValue = e.target.value
       setLoadout((prev) => {
         const newLoadout = { ...prev }
         const update = (newItem: Item | null) => {
@@ -535,15 +694,41 @@ function App() {
           }
         }
 
-        if (isNaN(val) || val <= 0) {
-          update(null)
-        } else if (currentItem.stackSize && val > currentItem.stackSize) {
-          update({ ...currentItem, count: currentItem.stackSize })
+        if (rawValue === '') {
+          update({ ...currentItem, count: undefined }) // Temporarily allow empty
         } else {
-          update({ ...currentItem, count: val })
+          const val = parseInt(rawValue)
+          if (!isNaN(val)) {
+            // Only update if it's a number
+            if (val <= 0) {
+              update({ ...currentItem, count: val })
+            } else if (currentItem.stackSize && val > currentItem.stackSize) {
+              update({ ...currentItem, count: currentItem.stackSize })
+            } else {
+              update({ ...currentItem, count: val })
+            }
+          }
         }
         return newLoadout
       })
+    }
+
+    const handleCountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      const val = parseInt(e.target.value)
+      if (isNaN(val) || val <= 0) {
+        setLoadout((prev) => {
+          const newLoadout = { ...prev }
+          if (index !== -1 && Array.isArray(newLoadout[section])) {
+            if (newLoadout[section] === prev[section]) {
+              ;(newLoadout[section] as any) = [...(prev[section] as any[])]
+            }
+            ;(newLoadout[section] as (Item | null)[])[index] = null
+          } else {
+            ;(newLoadout[section] as any) = null
+          }
+          return newLoadout
+        })
+      }
     }
 
     return (
@@ -568,14 +753,20 @@ function App() {
         onClick={(e) => handleSlotClick(e, section, index)}
       >
         {displayItem && (
-          <div className="slot-item" draggable onDragStart={(e) => handleDragStart(e, displayItem, section, index)} onDragEnd={handleDragEnd}>
+          <div
+            className={`slot-item ${getRarityClass(displayItem.rarity)}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
+            onDragEnd={handleDragEnd}
+          >
             {displayItem.isImage ? <img src={displayItem.icon} alt={displayItem.name} draggable={false} /> : <span className="slot-item-text">{displayItem.icon}</span>}
             <span className="slot-item-name">{displayItem.name}</span>
             {displayItem.stackSize && (
               <input
                 className="slot-count-input"
-                value={displayItem.count || 1}
+                value={displayItem.count ?? ''}
                 onChange={(e) => handleCountChange(e, displayItem)}
+                onBlur={handleCountBlur}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 type="number"
@@ -589,6 +780,21 @@ function App() {
     )
   }
 
+  const getRarityClass = (rarity: string) => {
+    switch (rarity) {
+      case 'Uncommon':
+        return 'rarity-uncommon'
+      case 'Rare':
+        return 'rarity-rare'
+      case 'Epic':
+        return 'rarity-epic'
+      case 'Legendary':
+        return 'rarity-legendary'
+      default:
+        return 'rarity-common'
+    }
+  }
+
   return (
     <>
       <div
@@ -600,6 +806,7 @@ function App() {
         <div className="box inventory-panel">
           <div className="panel-title-row">
             <h1 className="panel-title">INVENTORY</h1>
+            <button className="reload-btn" onClick={fetchInventory}>🔄 Reload Data</button>
           </div>
           <div className="inventory-content">
             <div className="inventory-sidebar">
@@ -679,7 +886,7 @@ function App() {
                   return (
                     <div
                       key={item.id}
-                      className="inventory-item-row"
+                      className={`inventory-item-row ${getRarityClass(activeItem.rarity)}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, activeItem, 'inventory')}
                       onDragEnd={handleDragEnd}
@@ -720,15 +927,13 @@ function App() {
         </div>
         <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver} onDrop={handleLoadoutPanelDrop}>
           <div className="panel-title-row">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h1 className="panel-title">LOADOUT</h1>
-                <h2 className="panel-subtitle">Subtitle</h2>
-              </div>
-              <button className="loot-btn" onClick={() => setShowLootTable(true)}>
-                📋 LOOT LIST
-              </button>
+            <div>
+              <h1 className="panel-title">LOADOUT</h1>
+              <h2 className="panel-subtitle">Subtitle</h2>
             </div>
+            <button className="loot-btn" onClick={() => setShowLootTable(true)}>
+              📋 LOOT LIST
+            </button>
           </div>
           <div className="content-grid">
             <div className="column-left">
@@ -777,17 +982,10 @@ function App() {
       {draggedItem && (
         <div
           ref={ghostRef}
-          className="slot-item"
+          className="slot-item dragged-item-ghost"
           style={{
-            position: 'fixed',
             left: '-1000px',
             top: '-1000px',
-            width: '130px',
-            height: '130px',
-            pointerEvents: 'none',
-            zIndex: 1000,
-            borderRadius: '12px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
             background:
               dropValidity === 'valid'
                 ? 'rgba(135, 206, 250, 0.4)' // Light Blue
