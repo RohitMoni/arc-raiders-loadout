@@ -476,17 +476,14 @@
 }
 
 .loot-btn:hover:before,
-.filter-btn:hover:before,
-.filter-btn.active:before {
+.filter-btn:hover:before {
   filter: blur(var(--btn-blur));
 }
 
 .loot-btn:hover:before,
 .loot-btn:hover:after,
 .filter-btn:hover:before,
-.filter-btn:hover:after,
-.filter-btn.active:before,
-.filter-btn.active:after {
+.filter-btn:hover:after {
   opacity: 1;
 }
 
