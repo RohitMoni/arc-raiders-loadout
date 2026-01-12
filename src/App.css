@@ -139,6 +139,12 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.spacer-slot {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.02);
+  pointer-events: none;
+}
+
 .inventory-content {
   display: flex;
   flex: 1;

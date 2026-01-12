@@ -1154,30 +1154,37 @@ function App() {
             </div>
             <div className="column-right">
               <div className="sub-section">
-                {loadout.quickUse.length > 0 && <>
-                  <h3 className="section-title">QUICK USE</h3>
-                  <div className="quick-use-grid">
-                    {loadout.quickUse.map((_, i) => (
-                      <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
-                    ))}
-                  </div>
-                </>}
-                {extraSlotConfig.count > 0 && <>
-                  <h3 className="section-title">{extraSlotConfig.types.join(' / ') || 'EXTRA'}</h3>
-                  <div className="extra-grid">
-                    {loadout.extra.map((_, i) => (
-                      <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
-                    ))}
-                  </div>
-                </>}
-                {loadout.safePocket.length > 0 && <>
-                  <h3 className="section-title">SAFE POCKET</h3>
-                  <div className="safe-pocket-grid">
-                    {loadout.safePocket.map((_, i) => (
-                      <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
-                    ))}
-                  </div>
-                </>}
+                <h3 className="section-title">QUICK USE</h3>
+                <div className="quick-use-grid">
+                  {loadout.quickUse.map((_, i) => (
+                    <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
+                  ))}
+                  {Array.from({ length: Math.max(0, 6 - loadout.quickUse.length) }).map((_, i) => (
+                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                  ))}
+                </div>
+
+                <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+                  {extraSlotConfig.types.join(' / ') || 'EXTRA'}
+                </h3>
+                <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+                  {loadout.extra.map((_, i) => (
+                    <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
+                  ))}
+                  {Array.from({ length: Math.max(0, 3 - loadout.extra.length) }).map((_, i) => (
+                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                  ))}
+                </div>
+
+                <h3 className="section-title">SAFE POCKET</h3>
+                <div className="safe-pocket-grid">
+                  {loadout.safePocket.map((_, i) => (
+                    <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
+                  ))}
+                  {Array.from({ length: Math.max(0, 3 - loadout.safePocket.length) }).map((_, i) => (
+                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
