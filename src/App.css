@@ -637,3 +637,18 @@
 .slot-item:hover {
   box-shadow: 0 0 8px var(--rarity-color);
 }
+
+.item-tooltip {
+  position: fixed;
+  background-color: rgba(13, 16, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 3000;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}

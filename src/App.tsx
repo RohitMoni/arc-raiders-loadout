@@ -103,6 +103,8 @@ function App() {
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  const initialTooltipPos = useRef({ x: 0, y: 0 })
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
@@ -118,6 +120,7 @@ function App() {
     extra: [],
     safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
   })
+  const [hoveredItem, setHoveredItem] = useState<Item | null>(null)
 
   const extraSlotConfig = useMemo(() => {
     const augment = loadout.augment
@@ -744,6 +747,7 @@ function App() {
     setDropValidity(null)
     setActiveSlot(null)
     setDragSource(null)
+    setHoveredItem(null)
   }
 
   const handleAppDrop = (e: DragEvent) => {
@@ -802,6 +806,7 @@ function App() {
     setDropValidity(null)
     setActiveSlot(null)
     setDragSource(null)
+    setHoveredItem(null)
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
@@ -815,6 +820,7 @@ function App() {
       }
       console.log('[SlotClick] Unequipping item via Shift+Click')
       e.preventDefault()
+      setHoveredItem(null)
       setLoadout((prev) => {
         const newLoadout = { ...prev }
         if (index !== -1 && Array.isArray(newLoadout[section])) {
@@ -973,6 +979,18 @@ function App() {
             draggable={!isFixedSlot}
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
+            onMouseEnter={(e) => {
+              if (draggedItem) return
+              initialTooltipPos.current = { x: e.clientX, y: e.clientY }
+              setHoveredItem(displayItem)
+            }}
+            onMouseMove={(e) => {
+              if (tooltipRef.current) {
+                tooltipRef.current.style.left = `${e.clientX + 15}px`
+                tooltipRef.current.style.top = `${e.clientY + 15}px`
+              }
+            }}
+            onMouseLeave={() => setHoveredItem(null)}
           >
             <div className="slot-item-top">
               {displayItem.isImage ? (
@@ -981,9 +999,8 @@ function App() {
                 <span className="slot-item-text">{displayItem.icon}</span>
               )}
             </div>
-            <div className="slot-item-bottom">
-              <span className="slot-item-name">{displayItem.name}</span>
-              {displayItem.stackSize && (
+            {displayItem.stackSize && (
+              <div className="slot-item-bottom" style={{ justifyContent: 'flex-end' }}>
                 <input
                   className="slot-count-input"
                   value={displayItem.count ?? ''}
@@ -994,8 +1011,8 @@ function App() {
                   type="number"
                   min="1"
                 />
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
         {isDragging && !isValid && <div className="slot-invalid-overlay">🚫</div>}
@@ -1242,10 +1259,24 @@ function App() {
           <div className="slot-item-top">
             {draggedItem.isImage ? <img src={draggedItem.icon} alt={draggedItem.name} /> : <span className="slot-item-text">{draggedItem.icon}</span>}
           </div>
-          <div className="slot-item-bottom">
-            <span className="slot-item-name">{draggedItem.name}</span>
-            {draggedItem.stackSize && <span className="slot-count-display" style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{draggedItem.count || 1}</span>}
-          </div>
+          {draggedItem.stackSize && (
+            <div className="slot-item-bottom">
+              <span className="slot-count-display" style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{draggedItem.count || 1}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hoveredItem && !draggedItem && (
+        <div
+          ref={tooltipRef}
+          className="item-tooltip"
+          style={{
+            left: initialTooltipPos.current.x + 15,
+            top: initialTooltipPos.current.y + 15,
+          }}
+        >
+          {hoveredItem.name}
         </div>
       )}
 
