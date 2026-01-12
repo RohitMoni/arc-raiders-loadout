@@ -45,6 +45,7 @@ interface Item {
   count?: number
   craftQuantity?: number
   shieldCompatibility?: string[]
+  slots?: Record<string, number>
 }
 
 interface LoadoutState {
@@ -78,6 +79,20 @@ const emptyImg = new Image()
 emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
 function App() {
+  const DEFAULT_SLOTS = {
+    backpack: 16,
+    quickUse: 3,
+    safePocket: 3,
+  }
+  const EXTRA_SLOT_TYPES = [
+    'trinket',
+    'grenade',
+    'utility',
+    'integrated_binoculars',
+    'integrated_shield_recharger',
+    'healing',
+  ]
+
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
@@ -85,6 +100,7 @@ function App() {
   const [isInventoryLoaded, setIsInventoryLoaded] = useState(false)
   const [showLootTable, setShowLootTable] = useState(false)
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
+  const [extraSlotConfig, setExtraSlotConfig] = useState<{ types: string[]; count: number }>({ types: [], count: 0 })
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -97,10 +113,10 @@ function App() {
     augment: null,
     shield: null,
     weapons: [null, null],
-    backpack: Array(24).fill(null),
-    quickUse: Array(4).fill(null),
-    extra: Array(3).fill(null),
-    safePocket: Array(3).fill(null),
+    backpack: Array(DEFAULT_SLOTS.backpack).fill(null),
+    quickUse: Array(DEFAULT_SLOTS.quickUse).fill(null),
+    extra: [],
+    safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
   })
 
   const fetchInventory = useCallback(async () => {
@@ -179,6 +195,7 @@ function App() {
           stackSize: item.stackSize,
           craftQuantity: item.craftQuantity,
           shieldCompatibility: item.shieldCompatibility,
+          slots: item.slots,
         }
       })
       setAllItemData(lookup)
@@ -208,6 +225,7 @@ function App() {
             stackSize: item.stackSize,
             craftQuantity: item.craftQuantity,
             shieldCompatibility: item.shieldCompatibility,
+            slots: item.slots,
           }
         })
 
@@ -246,6 +264,67 @@ function App() {
     fetchInventory()
 
   }, [fetchInventory])
+
+  useEffect(() => {
+    const augment = loadout.augment
+    const newSlotConfig = {
+      backpack: augment?.slots?.backpack ?? DEFAULT_SLOTS.backpack,
+      quickUse: augment?.slots?.quickUse ?? DEFAULT_SLOTS.quickUse,
+      safePocket: augment?.slots?.safePocket ?? DEFAULT_SLOTS.safePocket,
+    }
+
+    const newExtraSlots: { types: string[]; count: number } = { types: [], count: 0 }
+    if (augment?.slots) {
+      for (const key of EXTRA_SLOT_TYPES) {
+        if (augment.slots[key] > 0) {
+          newExtraSlots.types.push(key.replace(/_/g, ' ').toUpperCase())
+          newExtraSlots.count += augment.slots[key]
+        }
+      }
+    }
+    setExtraSlotConfig(newExtraSlots)
+
+    const resizeSection = (currentItems: (Item | null)[], newSize: number): (Item | null)[] => {
+      if (newSize === currentItems.length) {
+        return currentItems
+      }
+      if (newSize > currentItems.length) {
+        return [...currentItems, ...Array(newSize - currentItems.length).fill(null)]
+      }
+      // newSize < currentItems.length (shrinking)
+      const keptItems = [...currentItems.slice(0, newSize)]
+      const overflowItems = currentItems.slice(newSize).filter(Boolean) as Item[]
+
+      if (overflowItems.length === 0) {
+        return keptItems
+      }
+
+      for (let i = 0; i < keptItems.length; i++) {
+        if (keptItems[i] === null) {
+          const itemToMove = overflowItems.shift()
+          if (itemToMove) {
+            keptItems[i] = itemToMove
+          } else {
+            break // No more overflow items to move
+          }
+        }
+      }
+      // Items still in overflowItems are discarded.
+      return keptItems
+    }
+
+    setLoadout((prev) => {
+      const newBackpack = resizeSection(prev.backpack, newSlotConfig.backpack)
+      const newQuickUse = resizeSection(prev.quickUse, newSlotConfig.quickUse)
+      const newSafePocket = resizeSection(prev.safePocket, newSlotConfig.safePocket)
+      const newExtra = resizeSection(prev.extra, newExtraSlots.count)
+
+      if (prev.backpack === newBackpack && prev.quickUse === newQuickUse && prev.safePocket === newSafePocket && prev.extra === newExtra) return prev
+
+      console.log('[Augment] Resizing slots due to augment change.')
+      return { ...prev, backpack: newBackpack, quickUse: newQuickUse, safePocket: newSafePocket, extra: newExtra }
+    })
+  }, [loadout.augment])
 
   // --- Persistence & Sharing Logic ---
 
@@ -314,10 +393,10 @@ function App() {
         augment: null,
         shield: null,
         weapons: [null, null],
-        backpack: Array(24).fill(null),
-        quickUse: Array(4).fill(null),
-        extra: Array(3).fill(null),
-        safePocket: Array(3).fill(null),
+        backpack: Array(DEFAULT_SLOTS.backpack).fill(null),
+        quickUse: Array(DEFAULT_SLOTS.quickUse).fill(null),
+        extra: [],
+        safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
       })
     }
   }
@@ -1060,33 +1139,43 @@ function App() {
               {renderSlot('weapons', 1, 'weapon-slot')}
             </div>
             <div className="column-middle">
-              <h3 className="section-title">BACKPACK</h3>
-              <div className="backpack-grid">
-                {Array.from({ length: 24 }).map((_, i) => (
-                  <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
-                ))}
-              </div>
+              {loadout.backpack.length > 0 && (
+                <>
+                  <h3 className="section-title">BACKPACK</h3>
+                  <div className="backpack-grid">
+                    {loadout.backpack.map((_, i) => (
+                      <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <div className="column-right">
               <div className="sub-section">
-                <h3 className="section-title">QUICK USE</h3>
-                <div className="quick-use-grid">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
-                  ))}
-                </div>
-                <h3 className="section-title">EXTRA</h3>
-                <div className="extra-grid">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
-                  ))}
-                </div>
-                <h3 className="section-title">SAFE POCKET</h3>
-                <div className="safe-pocket-grid">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
-                  ))}
-                </div>
+                {loadout.quickUse.length > 0 && <>
+                  <h3 className="section-title">QUICK USE</h3>
+                  <div className="quick-use-grid">
+                    {loadout.quickUse.map((_, i) => (
+                      <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
+                    ))}
+                  </div>
+                </>}
+                {extraSlotConfig.count > 0 && <>
+                  <h3 className="section-title">{extraSlotConfig.types.join(' / ') || 'EXTRA'}</h3>
+                  <div className="extra-grid">
+                    {loadout.extra.map((_, i) => (
+                      <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
+                    ))}
+                  </div>
+                </>}
+                {loadout.safePocket.length > 0 && <>
+                  <h3 className="section-title">SAFE POCKET</h3>
+                  <div className="safe-pocket-grid">
+                    {loadout.safePocket.map((_, i) => (
+                      <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
+                    ))}
+                  </div>
+                </>}
               </div>
             </div>
           </div>
