@@ -57,6 +57,21 @@ interface LoadoutState {
   safePocket: (Item | null)[]
 }
 
+interface SerializedItem {
+  id: string
+  count?: number
+}
+
+interface SerializedLoadout {
+  augment: SerializedItem | null
+  shield: SerializedItem | null
+  weapons: (SerializedItem | null)[]
+  backpack: (SerializedItem | null)[]
+  quickUse: (SerializedItem | null)[]
+  extra: (SerializedItem | null)[]
+  safePocket: (SerializedItem | null)[]
+}
+
 const emptyImg = new Image()
 emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
@@ -65,6 +80,7 @@ function App() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
   const [allItemData, setAllItemData] = useState<Record<string, Item>>({})
+  const [isInventoryLoaded, setIsInventoryLoaded] = useState(false)
   const [showLootTable, setShowLootTable] = useState(false)
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
@@ -144,10 +160,15 @@ function App() {
 
       const lookup: Record<string, Item> = {}
       normalizedItems.forEach((item: any) => {
+        let category = item.type || 'Material'
+        if (item.fileName === 'raider_hatch_key.json') category = 'Key'
+        else if (item.isWeapon) category = 'Weapon'
+        else if (item.type === 'Modification') category = 'Mod'
+
         lookup[item.id] = {
           id: item.id,
           name: item.name?.en || item.id,
-          category: item.type || 'Material',
+          category: category,
           rarity: item.rarity || 'Common',
           icon: item.imageFilename || '📦',
           isImage: !!item.imageFilename,
@@ -158,6 +179,7 @@ function App() {
         }
       })
       setAllItemData(lookup)
+      setIsInventoryLoaded(true)
 
       const processedItems = normalizedItems
         .filter((item: any) => {
@@ -221,6 +243,102 @@ function App() {
     fetchInventory()
 
   }, [fetchInventory])
+
+  // --- Persistence & Sharing Logic ---
+
+  const serializeLoadout = (current: LoadoutState): SerializedLoadout => {
+    const mapItem = (item: Item | null): SerializedItem | null => 
+      item ? { id: item.id, count: item.count } : null
+    
+    return {
+      augment: mapItem(current.augment),
+      shield: mapItem(current.shield),
+      weapons: current.weapons.map(mapItem),
+      backpack: current.backpack.map(mapItem),
+      quickUse: current.quickUse.map(mapItem),
+      extra: current.extra.map(mapItem),
+      safePocket: current.safePocket.map(mapItem),
+    }
+  }
+
+  const deserializeLoadout = useCallback((data: SerializedLoadout): LoadoutState => {
+    const mapItem = (sItem: SerializedItem | null): Item | null => {
+      if (!sItem || !allItemData[sItem.id]) return null
+      return { ...allItemData[sItem.id], count: sItem.count || 1 }
+    }
+
+    return {
+      augment: mapItem(data.augment),
+      shield: mapItem(data.shield),
+      weapons: data.weapons.map(mapItem),
+      backpack: data.backpack.map(mapItem),
+      quickUse: data.quickUse.map(mapItem),
+      extra: data.extra.map(mapItem),
+      safePocket: data.safePocket.map(mapItem),
+    }
+  }, [allItemData])
+
+  // Load from LocalStorage on mount (once inventory is ready)
+  useEffect(() => {
+    if (!isInventoryLoaded) return
+    
+    const saved = localStorage.getItem('arc_raiders_loadout')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        const restored = deserializeLoadout(parsed)
+        setLoadout(restored)
+        console.log('[Persistence] Loadout restored from local storage')
+      } catch (e) {
+        console.error('[Persistence] Failed to load saved loadout', e)
+      }
+    }
+  }, [isInventoryLoaded, deserializeLoadout])
+
+  // Save to LocalStorage on change
+  useEffect(() => {
+    if (!isInventoryLoaded) return
+    const serialized = serializeLoadout(loadout)
+    localStorage.setItem('arc_raiders_loadout', JSON.stringify(serialized))
+  }, [loadout, isInventoryLoaded])
+
+  const handleReset = () => {
+    if (confirm('Are you sure you want to reset your loadout?')) {
+      setLoadout({
+        augment: null,
+        shield: null,
+        weapons: [null, null],
+        backpack: Array(24).fill(null),
+        quickUse: Array(4).fill(null),
+        extra: Array(3).fill(null),
+        safePocket: Array(3).fill(null),
+      })
+    }
+  }
+
+  const handleShare = () => {
+    const serialized = serializeLoadout(loadout)
+    const json = JSON.stringify(serialized)
+    const encoded = btoa(json)
+    navigator.clipboard.writeText(encoded)
+      .then(() => alert('Loadout string copied to clipboard!'))
+      .catch(err => console.error('Failed to copy', err))
+  }
+
+  const handleImport = () => {
+    const input = prompt('Paste your loadout string here:')
+    if (!input) return
+
+    try {
+      const json = atob(input)
+      const parsed = JSON.parse(json)
+      const restored = deserializeLoadout(parsed)
+      setLoadout(restored)
+    } catch (e) {
+      alert('Invalid loadout string')
+      console.error(e)
+    }
+  }
 
   const filteredItems = inventoryItems.filter((item) => {
     const matchesFilter = activeFilter === 'all' || item.category === activeFilter
@@ -909,6 +1027,11 @@ function App() {
             <button className="loot-btn" onClick={() => setShowLootTable(true)}>
               📋 LOOT LIST
             </button>
+            <div className="header-actions" style={{ display: 'flex', gap: '8px' }}>
+               <button className="loot-btn" onClick={handleShare} title="Copy Loadout String">📤 SHARE</button>
+               <button className="loot-btn" onClick={handleImport} title="Import Loadout String">📥 IMPORT</button>
+               <button className="loot-btn" onClick={handleReset} style={{ background: '#d32f2f' }} title="Reset Loadout">🔄 RESET</button>
+            </div>
           </div>
           <div className="content-grid">
             <div className="column-left">
