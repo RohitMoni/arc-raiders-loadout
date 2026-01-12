@@ -46,6 +46,7 @@ interface Item {
   craftQuantity?: number
   shieldCompatibility?: string[]
   slots?: Record<string, number>
+  isIntegrated?: boolean
 }
 
 interface LoadoutState {
@@ -120,12 +121,16 @@ function App() {
 
   const extraSlotConfig = useMemo(() => {
     const augment = loadout.augment
-    const newExtraSlots: { types: string[]; count: number } = { types: [], count: 0 }
+    const newExtraSlots: { types: string[]; count: number; slotTypes: string[] } = { types: [], count: 0, slotTypes: [] }
     if (augment?.slots) {
       for (const key of EXTRA_SLOT_TYPES) {
-        if (augment.slots[key] > 0) {
+        const count = augment.slots[key] || 0
+        if (count > 0) {
           newExtraSlots.types.push(key.replace(/_/g, ' ').toUpperCase())
-          newExtraSlots.count += augment.slots[key]
+          newExtraSlots.count += count
+          for (let i = 0; i < count; i++) {
+            newExtraSlots.slotTypes.push(key)
+          }
         }
       }
     }
@@ -319,14 +324,30 @@ function App() {
       const newBackpack = resizeSection(prev.backpack, newSlotConfig.backpack)
       const newQuickUse = resizeSection(prev.quickUse, newSlotConfig.quickUse)
       const newSafePocket = resizeSection(prev.safePocket, newSlotConfig.safePocket)
-      const newExtra = resizeSection(prev.extra, extraSlotConfig.count)
+      let newExtra = resizeSection(prev.extra, extraSlotConfig.count)
+
+      if (extraSlotConfig.slotTypes.length > 0) {
+        newExtra = newExtra.map((item, index) => {
+          const type = extraSlotConfig.slotTypes[index]
+          if (type === 'integrated_binoculars' && allItemData['binoculars']) {
+            return { ...allItemData['binoculars'], count: 1, isIntegrated: true }
+          }
+          if (type === 'integrated_shield_recharger' && allItemData['surge_shield_recharger']) {
+            return { ...allItemData['surge_shield_recharger'], count: 1, isIntegrated: true }
+          }
+          if (item?.isIntegrated) {
+            return null
+          }
+          return item
+        })
+      }
 
       if (prev.backpack === newBackpack && prev.quickUse === newQuickUse && prev.safePocket === newSafePocket && prev.extra === newExtra) return prev
 
       console.log('[Augment] Resizing slots due to augment change.')
       return { ...prev, backpack: newBackpack, quickUse: newQuickUse, safePocket: newSafePocket, extra: newExtra }
     })
-  }, [loadout.augment, extraSlotConfig])
+  }, [loadout.augment, extraSlotConfig, allItemData])
 
   // --- Persistence & Sharing Logic ---
 
@@ -641,6 +662,13 @@ function App() {
 
     if (sourceSection === targetSection && sourceIndex === targetIndex) return
 
+    if (targetSection === 'extra') {
+      const slotType = extraSlotConfig.slotTypes[targetIndex]
+      if (slotType === 'integrated_binoculars' || slotType === 'integrated_shield_recharger') {
+        return
+      }
+    }
+
     if (!canEquip(item, targetSection)) {
       console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category, 'for slot', targetSection)
       return
@@ -779,6 +807,12 @@ function App() {
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
     console.log('[SlotClick] Section:', section, 'Index:', index, 'Shift:', e.shiftKey)
     if (e.shiftKey) {
+      if (section === 'extra') {
+        const slotType = extraSlotConfig.slotTypes[index]
+        if (slotType === 'integrated_binoculars' || slotType === 'integrated_shield_recharger') {
+          return
+        }
+      }
       console.log('[SlotClick] Unequipping item via Shift+Click')
       e.preventDefault()
       setLoadout((prev) => {
@@ -849,6 +883,7 @@ function App() {
     const isValid = isDragging ? canEquip(draggedItem!, section) : true
     const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
     const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index
+    const isFixedSlot = section === 'extra' && (extraSlotConfig.slotTypes[index] === 'integrated_binoculars' || extraSlotConfig.slotTypes[index] === 'integrated_shield_recharger')
 
     let displayItem = item
     if (dragSource && dragSource.section === section && dragSource.index === index && dragSource.isSplit && item && draggedItem) {
@@ -935,7 +970,7 @@ function App() {
         {displayItem && (
           <div
             className={`slot-item ${getRarityClass(displayItem.rarity)}`}
-            draggable
+            draggable={!isFixedSlot}
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
           >
