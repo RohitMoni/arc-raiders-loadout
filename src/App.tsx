@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
+import { useState, useEffect, useCallback, useMemo, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
@@ -78,21 +78,21 @@ interface SerializedLoadout {
 const emptyImg = new Image()
 emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
-function App() {
-  const DEFAULT_SLOTS = {
-    backpack: 16,
-    quickUse: 3,
-    safePocket: 3,
-  }
-  const EXTRA_SLOT_TYPES = [
-    'trinket',
-    'grenade',
-    'utility',
-    'integrated_binoculars',
-    'integrated_shield_recharger',
-    'healing',
-  ]
+const DEFAULT_SLOTS = {
+  backpack: 16,
+  quickUse: 3,
+  safePocket: 3,
+}
+const EXTRA_SLOT_TYPES = [
+  'trinket',
+  'grenade',
+  'utility',
+  'integrated_binoculars',
+  'integrated_shield_recharger',
+  'healing',
+]
 
+function App() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
@@ -100,7 +100,6 @@ function App() {
   const [isInventoryLoaded, setIsInventoryLoaded] = useState(false)
   const [showLootTable, setShowLootTable] = useState(false)
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
-  const [extraSlotConfig, setExtraSlotConfig] = useState<{ types: string[]; count: number }>({ types: [], count: 0 })
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -118,6 +117,20 @@ function App() {
     extra: [],
     safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
   })
+
+  const extraSlotConfig = useMemo(() => {
+    const augment = loadout.augment
+    const newExtraSlots: { types: string[]; count: number } = { types: [], count: 0 }
+    if (augment?.slots) {
+      for (const key of EXTRA_SLOT_TYPES) {
+        if (augment.slots[key] > 0) {
+          newExtraSlots.types.push(key.replace(/_/g, ' ').toUpperCase())
+          newExtraSlots.count += augment.slots[key]
+        }
+      }
+    }
+    return newExtraSlots
+  }, [loadout.augment])
 
   const fetchInventory = useCallback(async () => {
 
@@ -273,17 +286,6 @@ function App() {
       safePocket: augment?.slots?.safePocket ?? DEFAULT_SLOTS.safePocket,
     }
 
-    const newExtraSlots: { types: string[]; count: number } = { types: [], count: 0 }
-    if (augment?.slots) {
-      for (const key of EXTRA_SLOT_TYPES) {
-        if (augment.slots[key] > 0) {
-          newExtraSlots.types.push(key.replace(/_/g, ' ').toUpperCase())
-          newExtraSlots.count += augment.slots[key]
-        }
-      }
-    }
-    setExtraSlotConfig(newExtraSlots)
-
     const resizeSection = (currentItems: (Item | null)[], newSize: number): (Item | null)[] => {
       if (newSize === currentItems.length) {
         return currentItems
@@ -317,14 +319,14 @@ function App() {
       const newBackpack = resizeSection(prev.backpack, newSlotConfig.backpack)
       const newQuickUse = resizeSection(prev.quickUse, newSlotConfig.quickUse)
       const newSafePocket = resizeSection(prev.safePocket, newSlotConfig.safePocket)
-      const newExtra = resizeSection(prev.extra, newExtraSlots.count)
+      const newExtra = resizeSection(prev.extra, extraSlotConfig.count)
 
       if (prev.backpack === newBackpack && prev.quickUse === newQuickUse && prev.safePocket === newSafePocket && prev.extra === newExtra) return prev
 
       console.log('[Augment] Resizing slots due to augment change.')
       return { ...prev, backpack: newBackpack, quickUse: newQuickUse, safePocket: newSafePocket, extra: newExtra }
     })
-  }, [loadout.augment])
+  }, [loadout.augment, extraSlotConfig])
 
   // --- Persistence & Sharing Logic ---
 
@@ -354,11 +356,11 @@ function App() {
       title: data.title || 'LOADOUT',
       augment: mapItem(data.augment),
       shield: mapItem(data.shield),
-      weapons: data.weapons.map(mapItem),
-      backpack: data.backpack.map(mapItem),
-      quickUse: data.quickUse.map(mapItem),
-      extra: data.extra.map(mapItem),
-      safePocket: data.safePocket.map(mapItem),
+      weapons: Array.isArray(data.weapons) ? data.weapons.map(mapItem) : [null, null],
+      backpack: Array.isArray(data.backpack) ? data.backpack.map(mapItem) : Array(DEFAULT_SLOTS.backpack).fill(null),
+      quickUse: Array.isArray(data.quickUse) ? data.quickUse.map(mapItem) : Array(DEFAULT_SLOTS.quickUse).fill(null),
+      extra: Array.isArray(data.extra) ? data.extra.map(mapItem) : [],
+      safePocket: Array.isArray(data.safePocket) ? data.safePocket.map(mapItem) : Array(DEFAULT_SLOTS.safePocket).fill(null),
     }
   }, [allItemData])
 
