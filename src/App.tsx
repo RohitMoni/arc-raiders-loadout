@@ -48,6 +48,7 @@ interface Item {
 }
 
 interface LoadoutState {
+  title: string
   augment: Item | null
   shield: Item | null
   weapons: (Item | null)[]
@@ -63,6 +64,7 @@ interface SerializedItem {
 }
 
 interface SerializedLoadout {
+  title?: string
   augment: SerializedItem | null
   shield: SerializedItem | null
   weapons: (SerializedItem | null)[]
@@ -91,6 +93,7 @@ function App() {
   const [dragSource, setDragSource] = useState<{ section: string; index?: number; isSplit: boolean } | null>(null)
   const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
+    title: 'LOADOUT',
     augment: null,
     shield: null,
     weapons: [null, null],
@@ -251,6 +254,7 @@ function App() {
       item ? { id: item.id, count: item.count } : null
     
     return {
+      title: current.title,
       augment: mapItem(current.augment),
       shield: mapItem(current.shield),
       weapons: current.weapons.map(mapItem),
@@ -268,6 +272,7 @@ function App() {
     }
 
     return {
+      title: data.title || 'LOADOUT',
       augment: mapItem(data.augment),
       shield: mapItem(data.shield),
       weapons: data.weapons.map(mapItem),
@@ -305,6 +310,7 @@ function App() {
   const handleReset = () => {
     if (confirm('Are you sure you want to reset your loadout?')) {
       setLoadout({
+        title: 'LOADOUT',
         augment: null,
         shield: null,
         weapons: [null, null],
@@ -317,7 +323,15 @@ function App() {
   }
 
   const handleShare = () => {
-    const serialized = serializeLoadout(loadout)
+    let currentTitle = loadout.title
+    if (currentTitle.toUpperCase() === 'LOADOUT') {
+      const newTitle = prompt('Please enter a descriptive title for your loadout:', 'My Raider Loadout')
+      if (!newTitle) return // Cancelled
+      currentTitle = newTitle
+      setLoadout(prev => ({ ...prev, title: newTitle }))
+    }
+
+    const serialized = serializeLoadout({ ...loadout, title: currentTitle })
     const json = JSON.stringify(serialized)
     const encoded = btoa(json)
     navigator.clipboard.writeText(encoded)
@@ -1020,17 +1034,19 @@ function App() {
         </div>
         <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver} onDrop={handleLoadoutPanelDrop}>
           <div className="panel-title-row">
-            <div>
-              <h1 className="panel-title">LOADOUT</h1>
-              <h2 className="panel-subtitle">Subtitle</h2>
+            <div style={{ flex: 1, marginRight: '16px' }}>
+              <input
+                className="panel-title-input"
+                value={loadout.title}
+                onChange={(e) => setLoadout(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="NAME YOUR LOADOUT"
+              />
             </div>
-            <button className="loot-btn" onClick={() => setShowLootTable(true)}>
-              📋 LOOT LIST
-            </button>
             <div className="header-actions" style={{ display: 'flex', gap: '8px' }}>
-               <button className="loot-btn" onClick={handleShare} title="Copy Loadout String">📤 SHARE</button>
-               <button className="loot-btn" onClick={handleImport} title="Import Loadout String">📥 IMPORT</button>
-               <button className="loot-btn" onClick={handleReset} style={{ background: '#d32f2f' }} title="Reset Loadout">🔄 RESET</button>
+               <button className="loot-btn" onClick={() => setShowLootTable(true)}>LOOT LIST</button>
+               <button className="loot-btn" onClick={handleShare} title="Copy Loadout String">SHARE</button>
+               <button className="loot-btn" onClick={handleImport} title="Import Loadout String">IMPORT</button>
+               <button className="loot-btn" onClick={handleReset} style={{ background: '#d32f2f' }} title="Reset Loadout">RESET</button>
             </div>
           </div>
           <div className="content-grid">
