@@ -36,8 +36,3 @@ All Arc Raiders item data is pulled from https://github.com/RaidTheory/arcraider
 
 Stretch / Neat to have:
 * Copy paste loadout. Button (or Ctrl+C) to export loadout to clipboard. Giant json. Ctrl+V or button to import into page.
-
-## Data changes needed
-
-* Burletta 2, 3, 4 data isn't set up correctly where the system recognizes that they are higher levels of the Burletta weapon. Not sure exactly why. 
-* 
