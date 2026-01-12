@@ -44,6 +44,7 @@ interface Item {
   stackSize?: number
   count?: number
   craftQuantity?: number
+  shieldCompatibility?: string[]
 }
 
 interface LoadoutState {
@@ -153,6 +154,7 @@ function App() {
           recipe: resolveRecipe(item),
           stackSize: item.stackSize,
           craftQuantity: item.craftQuantity,
+          shieldCompatibility: item.shieldCompatibility,
         }
       })
       setAllItemData(lookup)
@@ -180,6 +182,7 @@ function App() {
             recipe: resolveRecipe(item),
             stackSize: item.stackSize,
             craftQuantity: item.craftQuantity,
+            shieldCompatibility: item.shieldCompatibility,
           }
         })
 
@@ -238,6 +241,27 @@ function App() {
       })
     })
   })
+
+  const getShieldType = (item: Item): string | null => {
+    if (item.id === 'light_shield') return 'light'
+    if (item.id === 'medium_shield') return 'medium'
+    if (item.id === 'heavy_shield') return 'heavy'
+    return null
+  }
+
+  const isShieldCompatible = (shield: Item | null, augment: Item | null): boolean => {
+    if (!shield) return true
+    const type = getShieldType(shield)
+    if (!type) return true // Not a standard shield? Allow it? Or assume compatible.
+    
+    // Light shields are always compatible
+    if (type === 'light') return true
+
+    // Medium/Heavy require an augment with compatibility
+    if (!augment || !augment.shieldCompatibility) return false
+    
+    return augment.shieldCompatibility.includes(type)
+  }
 
   const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
     console.log('[DragStart] Item:', item.name, 'Category:', item.category, 'Source:', sourceSection, 'Index:', sourceIndex)
@@ -313,7 +337,7 @@ function App() {
       const index = parseInt(indexStr)
 
       if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index) {
-        const isValid = canEquip(draggedItem.category, section)
+        const isValid = canEquip(draggedItem, section)
         console.log('[DragOver] New Active Slot:', section, index, 'Valid:', isValid)
         setActiveSlot({ section: section as keyof LoadoutState, index })
         setDropValidity(isValid ? 'valid' : 'invalid')
@@ -347,10 +371,15 @@ function App() {
     e.preventDefault()
   }
 
-  const canEquip = (category: string, slotType: string) => {
+  const canEquip = (item: Item, slotType: string) => {
+    const category = item.category
     switch (category) {
       case 'Augment': return slotType === 'augment'
-      case 'Shield': return slotType === 'shield' || slotType === 'backpack' || slotType === 'safePocket'
+      case 'Shield': 
+        if (slotType === 'shield') {
+          return isShieldCompatible(item, loadout.augment)
+        }
+        return slotType === 'backpack' || slotType === 'safePocket'
       case 'Weapon': return slotType === 'weapons' || slotType === 'backpack'
       case 'Ammunition': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
       case 'Mod': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
@@ -399,7 +428,7 @@ function App() {
 
     if (sourceSection === targetSection && sourceIndex === targetIndex) return
 
-    if (!canEquip(item.category, targetSection)) {
+    if (!canEquip(item, targetSection)) {
       console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category, 'for slot', targetSection)
       return
     }
@@ -458,6 +487,16 @@ function App() {
         }
       }
 
+      // Check Shield Compatibility if Augment changed
+      if (targetSection === 'augment' || sourceSection === 'augment') {
+        const currentAugment = newLoadout.augment
+        const currentShield = newLoadout.shield
+        if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+          console.log('[Loadout] Removing incompatible shield:', currentShield.name)
+          newLoadout.shield = null
+        }
+      }
+
       return newLoadout
     })
     setDraggedItem(null)
@@ -504,6 +543,17 @@ function App() {
         } else {
           ;(newLoadout[sec] as any) = remaining > 0 ? { ...sourceItem!, count: remaining } : null
         }
+
+        // Check Shield Compatibility if Augment removed
+        if (sec === 'augment') {
+           const currentAugment = newLoadout.augment
+           const currentShield = newLoadout.shield
+           if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+             console.log('[Loadout] Removing incompatible shield after augment unequip')
+             newLoadout.shield = null
+           }
+        }
+
         return newLoadout
       })
     }
@@ -527,6 +577,16 @@ function App() {
           ;(newLoadout[section] as (Item | null)[])[index] = null
         } else {
           ;(newLoadout[section] as any) = null
+        }
+
+        // Check Shield Compatibility if Augment removed
+        if (section === 'augment') {
+           const currentAugment = newLoadout.augment
+           const currentShield = newLoadout.shield
+           if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+             console.log('[Loadout] Removing incompatible shield after augment removal')
+             newLoadout.shield = null
+           }
         }
 
         return newLoadout
@@ -573,7 +633,7 @@ function App() {
   const renderSlot = (section: keyof LoadoutState, index: number = -1, className: string) => {
     const item = index === -1 ? (loadout[section] as Item | null) : (loadout[section] as (Item | null)[])[index]
     const isDragging = !!draggedItem
-    const isValid = isDragging ? canEquip(draggedItem!.category, section) : true
+    const isValid = isDragging ? canEquip(draggedItem!, section) : true
     const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
     const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index
 
