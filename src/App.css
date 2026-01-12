@@ -1,3 +1,17 @@
+:root {
+  --btn-padding-x: 20px;
+  --btn-padding-y: 10px;
+  --btn-color: #888;
+  --btn-color-hover: #0d101c;
+  --btn-bgcolor: rgba(255, 255, 255, 0.05);
+  --btn-bgcolor-hover: #ffb700;
+  --btn-border-radius: 8px;
+  --btn-blur: 0px;
+  --font-size: 14px;
+  --easing: 0.3s ease;
+  --bg: rgb(13, 16, 28);
+}
+
 .app-container {
   display: flex;
   width: 100%;
@@ -158,28 +172,7 @@
   gap: 12px;
   padding-right: 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.filter-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #888;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  font-size: 18px;
-  user-select: none;
-}
-
-.filter-btn:hover, .filter-btn.active {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.4);
+  isolation: isolate;
 }
 
 .inventory-main {
@@ -444,34 +437,114 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.loot-btn {
+.header-actions {
+  isolation: isolate;
+}
+
+.loot-btn,
+.filter-btn {
   height: 40px;
-  padding: 0 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #888;
+  padding: 0 var(--btn-padding-x);
+  background-color: var(--btn-bgcolor);
+  border: 0 none;
+  border-radius: var(--btn-border-radius);
+  color: var(--btn-color);
   cursor: pointer;
   font-weight: 700;
-  transition: all 0.2s;
-  font-size: 14px;
+  transition: color var(--easing), background-color var(--easing);
+  font-size: var(--font-size);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   user-select: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
-.loot-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.4);
+.filter-btn {
+  padding: 0;
+  width: 40px;
+  font-size: 18px;
+}
+
+.loot-btn:hover,
+.filter-btn:hover,
+.filter-btn.active {
+  background-color: var(--btn-bgcolor-hover);
+  color: var(--btn-color-hover);
+}
+
+.loot-btn:hover:before,
+.filter-btn:hover:before,
+.filter-btn.active:before {
+  filter: blur(var(--btn-blur));
+}
+
+.loot-btn:hover:before,
+.loot-btn:hover:after,
+.filter-btn:hover:before,
+.filter-btn:hover:after,
+.filter-btn.active:before,
+.filter-btn.active:after {
+  opacity: 1;
+}
+
+/* Blurred gradient background */
+.loot-btn:before,
+.filter-btn:before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -2;
+  background: linear-gradient(160deg, 
+    #ffffff00 0%, 
+    #ffffff 15%, 
+    #00fff3 25%, 
+    #ff00ff 30%, 
+    #ffffff00 35%,
+    #ffffff00 40%,
+    #ffffff 55%,
+    #00fff3 65%,
+    #ff00ff 70%,
+    #ffffff00 75%,
+    #ffffff00 80%,
+    #ffffff 95%,
+    #00fff3 100%
+  );
+  background-size: 300% 300%;
+  filter: blur(0px);
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity var(--easing), filter var(--easing), background-position var(--easing);
+  animation: gradientMove 3s linear infinite;
+}
+
+/* Mask layer to create the gap */
+.loot-btn:after,
+.filter-btn:after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  background: var(--bg);
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity var(--easing);
 }
 
 .loot-btn.icon-only {
   padding: 0;
   width: 40px;
+}
+
+@keyframes gradientMove {
+  0% {
+    background-position: 15% 15%;
+  }
+  100% {
+    background-position: 75% 75%;
+  }
 }
 
 .loot-overlay {
