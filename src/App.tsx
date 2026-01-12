@@ -392,6 +392,23 @@ function App() {
   useEffect(() => {
     if (!isInventoryLoaded) return
     
+    // Check URL for loadout
+    const path = window.location.pathname
+    const urlMatch = path.match(/^\/loadout\/(.+)$/)
+    if (urlMatch) {
+      try {
+        const encoded = decodeURIComponent(urlMatch[1])
+        const json = atob(encoded)
+        const parsed = JSON.parse(json)
+        const restored = deserializeLoadout(parsed)
+        setLoadout(restored)
+        console.log('[Persistence] Loadout restored from URL')
+        return
+      } catch (e) {
+        console.error('[Persistence] Failed to load loadout from URL', e)
+      }
+    }
+
     const saved = localStorage.getItem('arc_raiders_loadout')
     if (saved) {
       try {
@@ -439,24 +456,10 @@ function App() {
     const serialized = serializeLoadout({ ...loadout, title: currentTitle })
     const json = JSON.stringify(serialized)
     const encoded = btoa(json)
-    navigator.clipboard.writeText(encoded)
-      .then(() => alert('Loadout string copied to clipboard!'))
+    const url = `${window.location.origin}/loadout/${encodeURIComponent(encoded)}`
+    navigator.clipboard.writeText(url)
+      .then(() => alert('Loadout URL copied to clipboard!'))
       .catch(err => console.error('Failed to copy', err))
-  }
-
-  const handleImport = () => {
-    const input = prompt('Paste your loadout string here:')
-    if (!input) return
-
-    try {
-      const json = atob(input)
-      const parsed = JSON.parse(json)
-      const restored = deserializeLoadout(parsed)
-      setLoadout(restored)
-    } catch (e) {
-      alert('Invalid loadout string')
-      console.error(e)
-    }
   }
 
   const filteredItems = inventoryItems.filter((item) => {
@@ -1177,11 +1180,8 @@ function App() {
             </div>
             <div className="header-actions" style={{ display: 'flex', gap: '8px' }}>
                <button className="loot-btn" onClick={() => setShowLootTable(true)}>LOOT LIST</button>
-               <button className="loot-btn icon-only" onClick={handleShare} title="Copy Loadout String">
+               <button className="loot-btn icon-only" onClick={handleShare} title="Copy Loadout URL">
                  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
-               </button>
-               <button className="loot-btn icon-only" onClick={handleImport} title="Import Loadout String">
-                 <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                </button>
                <button className="loot-btn" onClick={handleReset} title="Reset Loadout">RESET</button>
             </div>
