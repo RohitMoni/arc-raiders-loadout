@@ -361,6 +361,8 @@ function App() {
       isSplit: boolean
     }
 
+    if (sourceSection === targetSection && sourceIndex === targetIndex) return
+
     if (!canEquip(item.category, targetSection)) return
 
     setLoadout((prev) => {
@@ -667,7 +669,6 @@ function App() {
         <div className="box inventory-panel">
           <div className="panel-title-row">
             <h1 className="panel-title">INVENTORY</h1>
-            <button className="reload-btn" onClick={fetchInventory}>🔄 Reload Data</button>
           </div>
           <div className="inventory-content">
             <div className="inventory-sidebar">
