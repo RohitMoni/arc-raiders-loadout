@@ -43,6 +43,7 @@ interface Item {
   variants?: Item[]
   stackSize?: number
   count?: number
+  craftQuantity?: number
 }
 
 interface LoadoutState {
@@ -59,52 +60,28 @@ const emptyImg = new Image()
 emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
 function App() {
-
   const [search, setSearch] = useState('')
-
   const [activeFilter, setActiveFilter] = useState('all')
-
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
-
   const [allItemData, setAllItemData] = useState<Record<string, Item>>({})
-
   const [showLootTable, setShowLootTable] = useState(false)
-
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
-
   const [draggedItem, setDraggedItem] = useState<Item | null>(null)
-
   const ghostRef = useRef<HTMLDivElement>(null)
-
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
-
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
-
   const [dragSource, setDragSource] = useState<{ section: string; index?: number; isSplit: boolean } | null>(null)
-
   const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
-
   const [loadout, setLoadout] = useState<LoadoutState>({
-
     augment: null,
-
     shield: null,
-
     weapons: [null, null],
-
     backpack: Array(24).fill(null),
-
     quickUse: Array(4).fill(null),
-
     extra: Array(3).fill(null),
-
     safePocket: Array(3).fill(null),
-
   })
-
-
 
   const fetchInventory = useCallback(async () => {
 
@@ -113,8 +90,6 @@ function App() {
       const response = await fetch('https://api.github.com/repos/RohitMoni/arc-raiders-data/contents/items')
 
       const files = await response.json()
-
-
 
       const itemPromises = files
 
@@ -130,11 +105,7 @@ function App() {
 
         })
 
-
-
       const rawItems = await Promise.all(itemPromises)
-
-
 
       const normalizedItems = rawItems.map((item: any) => ({
 
@@ -144,231 +115,109 @@ function App() {
 
       }))
 
-
-
       const itemMap = new Map(normalizedItems.map((item: any) => [item.id, item]))
-
-
-
       const resolveRecipe = (item: any) => {
-
         const id = item.id
-
         const match = id.match(/^(.+)_(i|ii|iii|iv|v)$/)
-
         if (!match) return item.recipe
-
-
-
         const baseName = match[1]
-
         const tierStr = match[2]
-
         const tiers = ['i', 'ii', 'iii', 'iv', 'v']
-
         const targetTier = tiers.indexOf(tierStr) + 1
-
-
-
         if (!itemMap.has(`${baseName}_i`)) return item.recipe
-
-
-
         const combinedRecipe: Record<string, number> = {}
-
-
-
         for (let i = 0; i < targetTier; i++) {
-
           const currentTierStr = tiers[i]
-
           const currentId = `${baseName}_${currentTierStr}`
-
           const currentItem = itemMap.get(currentId)
-
-
-
           if (!currentItem) continue
-
-
-
           const costs = i === 0 ? currentItem.recipe : currentItem.upgradeCost
-
-
-
           if (costs) {
-
             Object.entries(costs).forEach(([key, val]) => {
-
               combinedRecipe[key] = (combinedRecipe[key] || 0) + (val as number)
-
             })
-
           }
-
         }
-
-
-
         return combinedRecipe
-
       }
 
-
-
       const lookup: Record<string, Item> = {}
-
       normalizedItems.forEach((item: any) => {
-
         lookup[item.id] = {
-
           id: item.id,
-
           name: item.name?.en || item.id,
-
           category: item.type || 'Material',
-
           rarity: item.rarity || 'Common',
-
           icon: item.imageFilename || '📦',
-
           isImage: !!item.imageFilename,
-
           recipe: resolveRecipe(item),
-
           stackSize: item.stackSize,
-
+          craftQuantity: item.craftQuantity,
         }
-
       })
-
       setAllItemData(lookup)
 
-
-
       const processedItems = normalizedItems
-
         .filter((item: any) => {
-
           const validTypes = ['Augment', 'Shield', 'Ammunition', 'Modification', 'Quick Use']
-
           const hasValidType = validTypes.includes(item.type)
-
           const isWeapon = item.isWeapon === true
-
           const isKey = item.fileName === 'raider_hatch_key.json'
-
           return hasValidType || isWeapon || isKey
-
         })
-
         .map((item: any, index: number) => {
-
           let category = item.type
-
           if (item.fileName === 'raider_hatch_key.json') category = 'Key'
-
           else if (item.isWeapon) category = 'Weapon'
-
           else if (item.type === 'Modification') category = 'Mod'
-
-
-
           return {
-
             id: item.id || `item-${index}`,
-
             name: item.name?.en || item.fileName.replace('.json', ''),
-
             category: category,
-
             rarity: item.rarity || 'Common',
-
             icon: item.imageFilename || '📦',
-
             isImage: !!item.imageFilename,
-
             recipe: resolveRecipe(item),
-
             stackSize: item.stackSize,
-
+            craftQuantity: item.craftQuantity,
           }
-
         })
-
-
 
       // Group items by base name (e.g. anvil_i, anvil_ii -> anvil)
-
       const groupedItems: Record<string, Item[]> = {}
-
       processedItems.forEach((item: Item) => {
-
         const match = item.id.match(/^(.+)_(i|ii|iii|iv|v)$/)
-
         const baseName = match ? match[1] : item.id
-
         if (!groupedItems[baseName]) groupedItems[baseName] = []
-
         groupedItems[baseName].push(item)
-
       })
 
-
-
       const finalInventoryItems: Item[] = Object.values(groupedItems)
-
         .map((group) => {
-
           if (group.length === 1) return group[0]
-
-
-
           // Sort by tier (i, ii, iii...)
-
           const tiers = ['i', 'ii', 'iii', 'iv', 'v']
-
           const getTierIndex = (id: string) => {
-
             const m = id.match(/_([iv]+)$/)
-
             return m ? tiers.indexOf(m[1]) : -1
-
           }
-
           group.sort((a, b) => getTierIndex(a.id) - getTierIndex(b.id))
-
-
-
           // Return the first item (Tier 1) as the base, with variants attached
-
           return { ...group[0], variants: group }
-
         })
-
         .sort((a, b) => a.name.localeCompare(b.name))
 
-
-
       setInventoryItems(finalInventoryItems)
-
     } catch (error) {
-
       console.error('Failed to fetch inventory:', error)
-
     }
-
   }, [setInventoryItems, setAllItemData, setSelectedVariantMap])
-
-
 
   useEffect(() => {
 
     fetchInventory()
 
   }, [fetchInventory])
-
-
 
   const filteredItems = inventoryItems.filter((item) => {
     const matchesFilter = activeFilter === 'all' || item.category === activeFilter
@@ -639,8 +488,12 @@ function App() {
 
     const addItemRecipe = (item: Item | null) => {
       if (!item || !item.recipe) return
+
+      const craftQuantity = item.craftQuantity || 1
+      const numCrafts = Math.ceil((item.count || 1) / craftQuantity)
+
       Object.entries(item.recipe).forEach(([id, count]) => {
-        totals[id] = (totals[id] || 0) + count * (item.count || 1)
+        totals[id] = (totals[id] || 0) + count * numCrafts
       })
     }
 
