@@ -1046,27 +1046,29 @@ function App() {
             }}
             onMouseLeave={() => setHoveredItem(null)}
           >
-            <div className="slot-item-top">
-              {displayItem.isImage ? (
-                <img src={displayItem.icon} alt={displayItem.name} draggable={false} />
-              ) : (
-                <span className="slot-item-text">{displayItem.icon}</span>
+            <div className="slot-item-content">
+              <div className="slot-item-top">
+                {displayItem.isImage ? (
+                  <img src={displayItem.icon} alt={displayItem.name} draggable={false} />
+                ) : (
+                  <span className="slot-item-text">{displayItem.icon}</span>
+                )}
+              </div>
+              {displayItem.stackSize && (
+                <div className="slot-item-bottom" style={{ justifyContent: 'flex-end' }}>
+                  <input
+                    className="slot-count-input"
+                    value={displayItem.count ?? ''}
+                    onChange={(e) => handleCountChange(e, displayItem)}
+                    onBlur={handleCountBlur}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    type="number"
+                    min="1"
+                  />
+                </div>
               )}
             </div>
-            {displayItem.stackSize && (
-              <div className="slot-item-bottom" style={{ justifyContent: 'flex-end' }}>
-                <input
-                  className="slot-count-input"
-                  value={displayItem.count ?? ''}
-                  onChange={(e) => handleCountChange(e, displayItem)}
-                  onBlur={handleCountBlur}
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  type="number"
-                  min="1"
-                />
-              </div>
-            )}
           </div>
         )}
         {isDragging && !isValid && <div className="slot-invalid-overlay">🚫</div>}
@@ -1311,14 +1313,16 @@ function App() {
                 : 'rgba(255, 99, 71, 0.4)', // Light Red
           }}
         >
-          <div className="slot-item-top">
-            {draggedItem.isImage ? <img src={draggedItem.icon} alt={draggedItem.name} /> : <span className="slot-item-text">{draggedItem.icon}</span>}
-          </div>
-          {draggedItem.stackSize && (
-            <div className="slot-item-bottom">
-              <span className="slot-count-display" style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{draggedItem.count || 1}</span>
+          <div className="slot-item-content">
+            <div className="slot-item-top">
+              {draggedItem.isImage ? <img src={draggedItem.icon} alt={draggedItem.name} /> : <span className="slot-item-text">{draggedItem.icon}</span>}
             </div>
-          )}
+            {draggedItem.stackSize && (
+              <div className="slot-item-bottom">
+                <span className="slot-count-display" style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{draggedItem.count || 1}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -309,13 +309,24 @@
   display: flex;
   flex-direction: column;
   cursor: grab;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   border-radius: inherit;
+  isolation: isolate;
 }
 
 .slot-item:active {
   cursor: grabbing;
+}
+
+.slot-item-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+  position: relative;
 }
 
 .slot-item-top {
@@ -702,7 +713,8 @@
 .slot-item.rarity-epic { --rarity-color: #cc00ff; }
 .slot-item.rarity-legendary { --rarity-color: #ffcc00; }
 
-.slot-item::after {
+/* Rarity Border on inner content */
+.slot-item-content::after {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -712,8 +724,52 @@
   z-index: 10;
 }
 
+/* Glow Effect for Slot Items */
+.slot-item:before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -2;
+  background: linear-gradient(160deg, 
+    #ffffff00 0%, 
+    #ffffff 15%, 
+    #00fff3 25%, 
+    #ff00ff 30%, 
+    #ffffff00 35%,
+    #ffffff00 40%,
+    #ffffff 55%,
+    #00fff3 65%,
+    #ff00ff 70%,
+    #ffffff00 75%,
+    #ffffff00 80%,
+    #ffffff 95%,
+    #00fff3 100%
+  );
+  background-size: 300% 300%;
+  filter: blur(0px);
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity var(--easing), filter var(--easing), background-position var(--easing);
+  animation: gradientMove 3s linear infinite;
+}
+
+/* Mask layer for Slot Items */
+.slot-item:not(.dragged-item-ghost):after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  background: var(--bg);
+  border-radius: inherit;
+  opacity: 1;
+}
+
 .slot-item:hover {
   box-shadow: 0 0 8px var(--rarity-color);
+}
+
+.slot-item:hover:before {
+  opacity: 1;
 }
 
 .item-tooltip {
