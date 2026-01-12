@@ -67,13 +67,13 @@ interface SerializedItem {
 
 interface SerializedLoadout {
   title?: string
-  augment: SerializedItem | null
-  shield: SerializedItem | null
-  weapons: (SerializedItem | null)[]
-  backpack: (SerializedItem | null)[]
-  quickUse: (SerializedItem | null)[]
-  extra: (SerializedItem | null)[]
-  safePocket: (SerializedItem | null)[]
+  augment?: SerializedItem | null
+  shield?: SerializedItem | null
+  weapons?: (SerializedItem | null)[]
+  backpack?: (SerializedItem | null)[]
+  quickUse?: (SerializedItem | null)[]
+  extra?: (SerializedItem | null)[]
+  safePocket?: (SerializedItem | null)[]
 }
 
 const emptyImg = new Image()
@@ -92,6 +92,16 @@ const EXTRA_SLOT_TYPES = [
   'integrated_shield_recharger',
   'healing',
 ]
+
+const calculateExtraSlotsCount = (augment: Item | null) => {
+  let count = 0
+  if (augment?.slots) {
+    for (const key of EXTRA_SLOT_TYPES) {
+      count += augment.slots[key] || 0
+    }
+  }
+  return count
+}
 
 function App() {
   const [search, setSearch] = useState('')
@@ -357,34 +367,68 @@ function App() {
   const serializeLoadout = (current: LoadoutState): SerializedLoadout => {
     const mapItem = (item: Item | null): SerializedItem | null => 
       item ? { id: item.id, count: item.count } : null
-    
-    return {
-      title: current.title,
-      augment: mapItem(current.augment),
-      shield: mapItem(current.shield),
-      weapons: current.weapons.map(mapItem),
-      backpack: current.backpack.map(mapItem),
-      quickUse: current.quickUse.map(mapItem),
-      extra: current.extra.map(mapItem),
-      safePocket: current.safePocket.map(mapItem),
+
+    const trim = (arr: (SerializedItem | null)[]) => {
+      let i = arr.length - 1
+      while (i >= 0 && arr[i] === null) i--
+      return arr.slice(0, i + 1)
     }
+    
+    const result: SerializedLoadout = {}
+    if (current.title && current.title !== 'LOADOUT') result.title = current.title
+    
+    const augment = mapItem(current.augment)
+    if (augment) result.augment = augment
+    
+    const shield = mapItem(current.shield)
+    if (shield) result.shield = shield
+    
+    const weapons = trim(current.weapons.map(mapItem))
+    if (weapons.length > 0) result.weapons = weapons
+    
+    const backpack = trim(current.backpack.map(mapItem))
+    if (backpack.length > 0) result.backpack = backpack
+    
+    const quickUse = trim(current.quickUse.map(mapItem))
+    if (quickUse.length > 0) result.quickUse = quickUse
+    
+    const extra = trim(current.extra.map(mapItem))
+    if (extra.length > 0) result.extra = extra
+    
+    const safePocket = trim(current.safePocket.map(mapItem))
+    if (safePocket.length > 0) result.safePocket = safePocket
+    
+    return result
   }
 
   const deserializeLoadout = useCallback((data: SerializedLoadout): LoadoutState => {
-    const mapItem = (sItem: SerializedItem | null): Item | null => {
+    const mapItem = (sItem: SerializedItem | null | undefined): Item | null => {
       if (!sItem || !allItemData[sItem.id]) return null
       return { ...allItemData[sItem.id], count: sItem.count || 1 }
     }
 
+    const augment = mapItem(data.augment)
+
+    const pad = (arr: (Item | null)[], size: number) => {
+      const padded = [...arr]
+      while (padded.length < size) padded.push(null)
+      return padded
+    }
+
+    const backpackCount = augment?.slots?.backpack ?? DEFAULT_SLOTS.backpack
+    const quickUseCount = augment?.slots?.quick_use ?? DEFAULT_SLOTS.quickUse
+    const safePocketCount = augment?.slots?.safe_pocket ?? DEFAULT_SLOTS.safePocket
+    const extraCount = calculateExtraSlotsCount(augment)
+
     return {
       title: data.title || 'LOADOUT',
-      augment: mapItem(data.augment),
+      augment: augment,
       shield: mapItem(data.shield),
-      weapons: Array.isArray(data.weapons) ? data.weapons.map(mapItem) : [null, null],
-      backpack: Array.isArray(data.backpack) ? data.backpack.map(mapItem) : Array(DEFAULT_SLOTS.backpack).fill(null),
-      quickUse: Array.isArray(data.quickUse) ? data.quickUse.map(mapItem) : Array(DEFAULT_SLOTS.quickUse).fill(null),
-      extra: Array.isArray(data.extra) ? data.extra.map(mapItem) : [],
-      safePocket: Array.isArray(data.safePocket) ? data.safePocket.map(mapItem) : Array(DEFAULT_SLOTS.safePocket).fill(null),
+      weapons: pad(Array.isArray(data.weapons) ? data.weapons.map(mapItem) : [], 2),
+      backpack: pad(Array.isArray(data.backpack) ? data.backpack.map(mapItem) : [], backpackCount),
+      quickUse: pad(Array.isArray(data.quickUse) ? data.quickUse.map(mapItem) : [], quickUseCount),
+      extra: pad(Array.isArray(data.extra) ? data.extra.map(mapItem) : [], extraCount),
+      safePocket: pad(Array.isArray(data.safePocket) ? data.safePocket.map(mapItem) : [], safePocketCount),
     }
   }, [allItemData])
 
@@ -454,9 +498,16 @@ function App() {
     }
 
     const serialized = serializeLoadout({ ...loadout, title: currentTitle })
-    const json = JSON.stringify(serialized)
-    const encoded = btoa(json)
-    const url = `${window.location.origin}/loadout/${encodeURIComponent(encoded)}`
+    
+    let url = ''
+    if (Object.keys(serialized).length === 0) {
+      url = window.location.origin
+    } else {
+      const json = JSON.stringify(serialized)
+      const encoded = btoa(json)
+      url = `${window.location.origin}/loadout/${encodeURIComponent(encoded)}`
+    }
+    
     navigator.clipboard.writeText(url)
       .then(() => alert('Loadout URL copied to clipboard!'))
       .catch(err => console.error('Failed to copy', err))
