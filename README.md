@@ -42,3 +42,7 @@ Deployed on [Vercel](https://vercel.com/).
 This is a client-side application, no auth, no database.
 All Arc Raiders item data is pulled from https://github.com/RohitMoni/arc-raiders-data which is a fork of https://github.com/RaidTheory/arcraiders-data
 
+
+## Credits
+
+Credit to https://codepen.io/RogerAntonio/pen/jEWxqYP for the css for the on-hover selection glow

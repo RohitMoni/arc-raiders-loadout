@@ -1206,9 +1206,10 @@ function App() {
                   />
                 </div>
               )}
-              {section === 'weapons' && displayItem.supportedModifications && (
+              {section === 'weapons' && (
                  <div className="mod-slots-row">
-                     {displayItem.supportedModifications.map((modType, mIdx) => {
+                     {(displayItem.supportedModifications && displayItem.supportedModifications.length > 0) ? (
+                         displayItem.supportedModifications.map((modType, mIdx) => {
                          const modItem = displayItem.modifications?.[mIdx]
                          const isModActive = activeSlot?.section === section && activeSlot?.index === index && activeSlot?.modIndex === mIdx
                          const isModValid = isDragging ? canEquip(draggedItem!, section, index, mIdx) : true
@@ -1279,7 +1280,10 @@ function App() {
                                 )}
                              </div>
                          )
-                     })}
+                     })
+                     ) : (
+                         <div className="mod-slot" style={{ visibility: 'hidden', border: 'none', background: 'transparent' }}></div>
+                     )}
                  </div>
               )}
             </div>
