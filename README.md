@@ -1,6 +1,18 @@
 # Arc Raiders Loadout Looter
 
+Set up your loadout in arc raiders. 
+Share it with friends.
 Figure out what you need to loot to keep your loadout going.
+
+This is a hobby project on the side that I'm using to test out coding with Gemini.
+
+## Gemini Stats
+
+* Number of times I've had to dig into the code: 3
+* Number of bugs it's created: 7
+* Number of times I've just had to do it myself: 4
+
+Note: It utterly failed when doing large-scale data manipulations on the data repo. Ex: For all .json files add x property. It kept trying to load the whole thing into memory / tokens all at once, which exceeded limits. Regex worked for some of this, other times I had to go the manual route.
 
 ## Requirements
 
@@ -15,24 +27,14 @@ Figure out what you need to loot to keep your loadout going.
 
 * Run `npm run dev` to host a local server that you can see in your browser
 
-### Remote
+### Deployment
 
-* Pushing anything to `main` will auto-deploy to https://arc-raiders-loadout-looter.vercel.app/
+* Pushing / Merges to `main` will auto-deploy to https://arc-raiders-loadout.vercel.app/
 
 ## High level architecture
 
 Using Vite + React.
 Deployed on [Vercel](https://vercel.com/).
 This is a client-side application, no auth, no database.
-All Arc Raiders item data is pulled from https://github.com/RaidTheory/arcraiders-data
+All Arc Raiders item data is pulled from https://github.com/RohitMoni/arc-raiders-data which is a fork of https://github.com/RaidTheory/arcraiders-data
 
-## Todo
-
-* Setup augment data
-    - Different augments have different loadout slots, current item data for augments doesn't seem to have that, need to add it for all the augments
-* Advanced Drag-and-drop
-    - Augments change loadout screen based on available slots.
-    - Drag and drop quick use into dedicated slots based on augment filtering.
-
-Stretch / Neat to have:
-* Copy paste loadout. Button (or Ctrl+C) to export loadout to clipboard. Giant json. Ctrl+V or button to import into page.
