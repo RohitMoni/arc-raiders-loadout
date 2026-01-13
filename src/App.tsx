@@ -1489,9 +1489,6 @@ function App() {
                   {loadout.quickUse.map((_, i) => (
                     <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
                   ))}
-                  {Array.from({ length: Math.max(0, 6 - loadout.quickUse.length) }).map((_, i) => (
-                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
-                  ))}
                 </div>
 
                 <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
