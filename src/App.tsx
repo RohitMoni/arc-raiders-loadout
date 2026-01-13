@@ -357,6 +357,9 @@ function App() {
           if (item?.isIntegrated) {
             return null
           }
+          if (item && !item.category.some((c) => c.toLowerCase() === type.toLowerCase())) {
+            return null
+          }
           return item
         })
       }
@@ -634,7 +637,7 @@ function App() {
       const index = parseInt(indexStr)
 
       if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index) {
-        const isValid = canEquip(draggedItem, section)
+        const isValid = canEquip(draggedItem, section, index)
         console.log('[DragOver] New Active Slot:', section, index, 'Valid:', isValid)
         setActiveSlot({ section: section as keyof LoadoutState, index })
         setDropValidity(isValid ? 'valid' : 'invalid')
@@ -668,7 +671,7 @@ function App() {
     e.preventDefault()
   }
 
-  const canEquip = (item: Item, slotType: string) => {
+  const canEquip = (item: Item, slotType: string, slotIndex: number = -1) => {
     const categories = item.category
     if (categories.includes('Augment') && slotType === 'augment') return true
     if (categories.includes('Shield')) {
@@ -678,10 +681,18 @@ function App() {
       if (slotType === 'backpack' || slotType === 'safePocket') return true
     }
     if (categories.includes('Weapon') && (slotType === 'weapons' || slotType === 'backpack')) return true
-    if (categories.includes('Ammunition') && (slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra')) return true
-    if (categories.includes('Modification') && (slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra')) return true
-    if (categories.includes('Quick Use') && (slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket' || slotType === 'extra')) return true
-    if (categories.includes('Key') && (slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra')) return true
+
+    if (slotType === 'extra') {
+      if (slotIndex === -1) return false
+      const type = extraSlotConfig.slotTypes[slotIndex]
+      if (!type || type.startsWith('integrated_')) return false
+      return categories.some((c) => c.toLowerCase() === type.toLowerCase())
+    }
+
+    if (categories.includes('Ammunition') && (slotType === 'backpack' || slotType === 'safePocket')) return true
+    if (categories.includes('Modification') && (slotType === 'backpack' || slotType === 'safePocket')) return true
+    if (categories.includes('Quick Use') && (slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket')) return true
+    if (categories.includes('Key') && (slotType === 'backpack' || slotType === 'safePocket')) return true
     return false
   }
 
@@ -731,7 +742,7 @@ function App() {
       }
     }
 
-    if (!canEquip(item, targetSection)) {
+    if (!canEquip(item, targetSection, targetIndex)) {
       console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
       return
     }
@@ -945,7 +956,7 @@ function App() {
   const renderSlot = (section: keyof LoadoutState, index: number = -1, className: string) => {
     const item = index === -1 ? (loadout[section] as Item | null) : (loadout[section] as (Item | null)[])[index]
     const isDragging = !!draggedItem
-    const isValid = isDragging ? canEquip(draggedItem!, section) : true
+    const isValid = isDragging ? canEquip(draggedItem!, section, index) : true
     const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
     const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index
     const isFixedSlot = section === 'extra' && (extraSlotConfig.slotTypes[index] === 'integrated_binoculars' || extraSlotConfig.slotTypes[index] === 'integrated_shield_recharger')
