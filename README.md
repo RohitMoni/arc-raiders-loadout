@@ -4,6 +4,10 @@ Set up your loadout in arc raiders.
 Share it with friends.
 Figure out what you need to loot to keep your loadout going.
 
+[Check it out Live!](https://arc-raiders-loadout.vercel.app/)
+[Report Issues or Suggest New Features](https://github.com/RohitMoni/arc-raiders-loadout/issues)
+
+
 This is a hobby project on the side that I'm using to test out coding with Gemini.
 
 ## Gemini Stats

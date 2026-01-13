@@ -88,7 +88,8 @@
   grid-template-columns: 3fr 4fr 3fr;
   gap: 48px;
   padding: 32px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   box-sizing: border-box;
 }
 
@@ -466,7 +467,8 @@
   height: 40px;
   padding: 0 var(--btn-padding-x);
   background-color: var(--btn-bgcolor);
-  border: 0 none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
   border-radius: var(--btn-border-radius);
   color: var(--btn-color);
   cursor: pointer;
@@ -879,4 +881,54 @@
 
 .mod-slot .slot-item-content {
     border-radius: 6px;
+}
+
+.loadout-actions-row {
+  padding: 16px 32px 0 32px;
+  display: flex;
+  gap: 8px;
+}
+
+.loadout-links-row {
+  padding: 12px 32px 0 32px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.small-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #888;
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+  display: inline-block;
+}
+
+.small-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #eee;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+s.coffee-btn {
+  margin-left: auto;
+  color: #FFDD00;
+  border-color: rgba(255, 221, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.coffee-btn:hover {
+  background: rgba(255, 221, 0, 0.1);
+  color: #FFDD00;
+  border-color: #FFDD00;
 }
