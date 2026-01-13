@@ -35,7 +35,7 @@ const getLevenshteinDistance = (a: string, b: string) => {
 interface Item {
   id: string
   name: string
-  category: string
+  category: string[]
   rarity: string
   icon: string
   isImage: boolean
@@ -210,15 +210,19 @@ function App() {
 
       const lookup: Record<string, Item> = {}
       normalizedItems.forEach((item: any) => {
-        let category = item.type || 'Material'
-        if (item.fileName === 'raider_hatch_key.json') category = 'Key'
-        else if (item.isWeapon) category = 'Weapon'
-        else if (item.type === 'Modification') category = 'Mod'
+        let categories: string[] = item.categories
+        if (!categories) {
+          let category = item.type || 'Material'
+          if (item.fileName === 'raider_hatch_key.json') category = 'Key'
+          else if (item.isWeapon) category = 'Weapon'
+          else if (item.type === 'Modification') category = 'Modification'
+          categories = [category]
+        }
 
         lookup[item.id] = {
           id: item.id,
           name: item.name?.en || item.id,
-          category: category,
+          category: categories,
           rarity: item.rarity || 'Common',
           icon: item.imageFilename || '📦',
           isImage: !!item.imageFilename,
@@ -241,14 +245,16 @@ function App() {
           return hasValidType || isWeapon || isKey
         })
         .map((item: any, index: number) => {
-          let category = item.type
-          if (item.fileName === 'raider_hatch_key.json') category = 'Key'
-          else if (item.isWeapon) category = 'Weapon'
-          else if (item.type === 'Modification') category = 'Mod'
+          let categories: string[] = item.categories
+          if (!categories) {
+            let category = item.type
+            if (item.isWeapon) category = 'Weapon'
+            categories = [category]
+          }
           return {
             id: item.id || `item-${index}`,
             name: item.name?.en || item.fileName.replace('.json', ''),
-            category: category,
+            category: categories,
             rarity: item.rarity || 'Common',
             icon: item.imageFilename || '📦',
             isImage: !!item.imageFilename,
@@ -514,13 +520,13 @@ function App() {
   }
 
   const filteredItems = inventoryItems.filter((item) => {
-    const matchesFilter = activeFilter === 'all' || item.category === activeFilter
+    const matchesFilter = activeFilter === 'all' || item.category.includes(activeFilter)
     if (!matchesFilter) return false
 
     const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean)
     if (searchTerms.length === 0) return true
 
-    const itemText = `${item.name} ${item.category} ${item.category === 'Mod' ? 'attachment' : ''}`.toLowerCase()
+    const itemText = `${item.name} ${item.category.join(' ')} ${item.category.includes('Modification') ? 'attachment' : ''}`.toLowerCase()
     const itemWords = itemText.split(/\s+/)
 
     return searchTerms.every((term) => {
@@ -555,7 +561,7 @@ function App() {
   }
 
   const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
-    console.log('[DragStart] Item:', item.name, 'Category:', item.category, 'Source:', sourceSection, 'Index:', sourceIndex)
+    console.log('[DragStart] Item:', item.name, 'Category:', item.category.join(', '), 'Source:', sourceSection, 'Index:', sourceIndex)
     let dragItem = { ...item }
     let isSplit = false
 
@@ -663,21 +669,20 @@ function App() {
   }
 
   const canEquip = (item: Item, slotType: string) => {
-    const category = item.category
-    switch (category) {
-      case 'Augment': return slotType === 'augment'
-      case 'Shield': 
-        if (slotType === 'shield') {
-          return isShieldCompatible(item, loadout.augment)
-        }
-        return slotType === 'backpack' || slotType === 'safePocket'
-      case 'Weapon': return slotType === 'weapons' || slotType === 'backpack'
-      case 'Ammunition': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
-      case 'Mod': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
-      case 'Quick Use': return slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket' || slotType === 'extra'
-      case 'Key': return slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra'
-      default: return false
+    const categories = item.category
+    if (categories.includes('Augment') && slotType === 'augment') return true
+    if (categories.includes('Shield')) {
+      if (slotType === 'shield') {
+        return isShieldCompatible(item, loadout.augment)
+      }
+      if (slotType === 'backpack' || slotType === 'safePocket') return true
     }
+    if (categories.includes('Weapon') && (slotType === 'weapons' || slotType === 'backpack')) return true
+    if (categories.includes('Ammunition') && (slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra')) return true
+    if (categories.includes('Modification') && (slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra')) return true
+    if (categories.includes('Quick Use') && (slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket' || slotType === 'extra')) return true
+    if (categories.includes('Key') && (slotType === 'backpack' || slotType === 'safePocket' || slotType === 'extra')) return true
+    return false
   }
 
   const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1) => {
@@ -715,7 +720,7 @@ function App() {
 
     const { item, sourceSection, sourceIndex, isSplit } = dropData
 
-    console.log('[SlotDrop] Dropped Item:', item.name, 'Category:', item.category)
+    console.log('[SlotDrop] Dropped Item:', item.name, 'Category:', item.category.join(', '))
 
     if (sourceSection === targetSection && sourceIndex === targetIndex) return
 
@@ -727,7 +732,7 @@ function App() {
     }
 
     if (!canEquip(item, targetSection)) {
-      console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category, 'for slot', targetSection)
+      console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
       return
     }
 
@@ -1134,8 +1139,8 @@ function App() {
                 📦
               </button>
               <button
-                className={`filter-btn ${activeFilter === 'Mod' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Mod')}
+                className={`filter-btn ${activeFilter === 'Modification' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('Modification')}
                 title="Mods"
               >
                 🔧
