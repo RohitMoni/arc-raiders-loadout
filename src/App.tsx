@@ -1259,7 +1259,9 @@ function App() {
                                         }}
                                         onMouseLeave={(e) => {
                                             e.stopPropagation()
-                                            setHoveredItem(null)
+                                            if (draggedItem) return
+                                            initialTooltipPos.current = { x: e.clientX, y: e.clientY }
+                                            setHoveredItem(displayItem)
                                         }}
                                     >
                                         <div className="slot-item-content">
@@ -1267,7 +1269,7 @@ function App() {
                                                 {modItem.isImage ? (
                                                   <img src={modItem.icon} alt={modItem.name} className="mod-slot-icon" draggable={false} />
                                                 ) : (
-                                                  <span className="slot-item-text" style={{ fontSize: '14px' }}>{modItem.icon}</span>
+                                                  <span className="slot-item-text">{modItem.icon}</span>
                                                 )}
                                             </div>
                                         </div>
