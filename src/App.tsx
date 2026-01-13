@@ -47,6 +47,8 @@ interface Item {
   shieldCompatibility?: string[]
   slots?: Record<string, number>
   isIntegrated?: boolean
+  supportedModifications?: string[]
+  modifications?: (Item | null)[]
 }
 
 interface LoadoutState {
@@ -63,6 +65,7 @@ interface LoadoutState {
 interface SerializedItem {
   id: string
   count?: number
+  modifications?: (SerializedItem | null)[]
 }
 
 interface SerializedLoadout {
@@ -118,8 +121,8 @@ function App() {
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
   const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
-  const [dragSource, setDragSource] = useState<{ section: string; index?: number; isSplit: boolean } | null>(null)
-  const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number } | null>(null)
+  const [dragSource, setDragSource] = useState<{ section: string; index?: number; modIndex?: number; isSplit: boolean } | null>(null)
+  const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number; modIndex?: number } | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
     title: 'LOADOUT',
     augment: null,
@@ -231,6 +234,7 @@ function App() {
           craftQuantity: item.craftQuantity,
           shieldCompatibility: item.shieldCompatibility,
           slots: item.slots,
+          supportedModifications: item.supportedModifications,
         }
       })
       setAllItemData(lookup)
@@ -263,6 +267,7 @@ function App() {
             craftQuantity: item.craftQuantity,
             shieldCompatibility: item.shieldCompatibility,
             slots: item.slots,
+            supportedModifications: item.supportedModifications,
           }
         })
 
@@ -375,7 +380,11 @@ function App() {
 
   const serializeLoadout = (current: LoadoutState): SerializedLoadout => {
     const mapItem = (item: Item | null): SerializedItem | null => 
-      item ? { id: item.id, count: item.count } : null
+      item ? { 
+        id: item.id, 
+        count: item.count,
+        modifications: item.modifications ? item.modifications.map(m => m ? { id: m.id, count: 1 } : null) : undefined
+      } : null
 
     const trim = (arr: (SerializedItem | null)[]) => {
       let i = arr.length - 1
@@ -413,7 +422,23 @@ function App() {
   const deserializeLoadout = useCallback((data: SerializedLoadout): LoadoutState => {
     const mapItem = (sItem: SerializedItem | null | undefined): Item | null => {
       if (!sItem || !allItemData[sItem.id]) return null
-      return { ...allItemData[sItem.id], count: sItem.count || 1 }
+      const baseItem = allItemData[sItem.id]
+      const item: Item = { ...baseItem, count: sItem.count || 1 }
+      
+      if (sItem.modifications && baseItem.supportedModifications) {
+         item.modifications = sItem.modifications.map(m => {
+             if (!m || !allItemData[m.id]) return null
+             return { ...allItemData[m.id], count: 1 }
+         })
+         // Ensure length matches supportedModifications
+         while (item.modifications.length < baseItem.supportedModifications.length) {
+             item.modifications.push(null)
+         }
+      } else if (baseItem.supportedModifications) {
+         item.modifications = Array(baseItem.supportedModifications.length).fill(null)
+      }
+      
+      return item
     }
 
     const augment = mapItem(data.augment)
@@ -563,8 +588,8 @@ function App() {
     return augment.shieldCompatibility.includes(type)
   }
 
-  const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number) => {
-    console.log('[DragStart] Item:', item.name, 'Category:', item.category.join(', '), 'Source:', sourceSection, 'Index:', sourceIndex)
+  const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number, sourceModIndex?: number) => {
+    console.log('[DragStart] Item:', item.name, 'Category:', item.category.join(', '), 'Source:', sourceSection, 'Index:', sourceIndex, 'ModIndex:', sourceModIndex)
     let dragItem = { ...item }
     let isSplit = false
 
@@ -589,9 +614,9 @@ function App() {
       })
     })
 
-    setDragSource({ section: sourceSection, index: sourceIndex, isSplit })
+    setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
 
-    const json = JSON.stringify({ item: dragItem, sourceSection, sourceIndex, isSplit })
+    const json = JSON.stringify({ item: dragItem, sourceSection, sourceIndex, sourceModIndex, isSplit })
     e.dataTransfer.setData('application/json', json)
     e.dataTransfer.setData('text/plain', json)
     
@@ -633,13 +658,14 @@ function App() {
     })
 
     if (closestKey && minDistance < threshold) {
-      const [section, indexStr] = (closestKey as string).split('|')
+      const [section, indexStr, modIndexStr] = (closestKey as string).split('|')
       const index = parseInt(indexStr)
+      const modIndex = modIndexStr ? parseInt(modIndexStr) : undefined
 
-      if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index) {
-        const isValid = canEquip(draggedItem, section, index)
-        console.log('[DragOver] New Active Slot:', section, index, 'Valid:', isValid)
-        setActiveSlot({ section: section as keyof LoadoutState, index })
+      if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index || activeSlot.modIndex !== modIndex) {
+        const isValid = canEquip(draggedItem, section, index, modIndex)
+        console.log('[DragOver] New Active Slot:', section, index, modIndex, 'Valid:', isValid)
+        setActiveSlot({ section: section as keyof LoadoutState, index, modIndex })
         setDropValidity(isValid ? 'valid' : 'invalid')
       }
     } else {
@@ -656,7 +682,7 @@ function App() {
     e.preventDefault()
     e.stopPropagation()
     if (activeSlot) {
-      handleSlotDrop(e, activeSlot.section, activeSlot.index)
+      handleSlotDrop(e, activeSlot.section, activeSlot.index, activeSlot.modIndex)
     } else {
       console.log('[PanelDrop] No active slot to drop into.')
     }
@@ -671,8 +697,21 @@ function App() {
     e.preventDefault()
   }
 
-  const canEquip = (item: Item, slotType: string, slotIndex: number = -1) => {
+  const canEquip = (item: Item, slotType: string, slotIndex: number = -1, modIndex: number = -1) => {
     const categories = item.category
+
+    // Mod slot logic
+    if (slotType === 'weapons' && modIndex !== -1) {
+       // We need to check the weapon at slotIndex
+       const weapon = loadout.weapons[slotIndex]
+       if (!weapon || !weapon.supportedModifications) return false
+       const requiredCategory = weapon.supportedModifications[modIndex]
+       if (!requiredCategory) return false
+       
+       // Check if item has this category
+       return item.category.includes(requiredCategory)
+    }
+
     if (categories.includes('Augment') && slotType === 'augment') return true
     if (categories.includes('Shield')) {
       if (slotType === 'shield') {
@@ -696,14 +735,14 @@ function App() {
     return false
   }
 
-  const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1) => {
-    console.log('[SlotDrop] Target:', targetSection, targetIndex)
+  const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1, targetModIndex: number = -1) => {
+    console.log('[SlotDrop] Target:', targetSection, targetIndex, targetModIndex)
     e.preventDefault()
     e.stopPropagation()
 
     console.log('[SlotDrop] Data types available:', e.dataTransfer.types)
 
-    let dropData: { item: Item; sourceSection: string; sourceIndex?: number; isSplit: boolean } | null = null
+    let dropData: { item: Item; sourceSection: string; sourceIndex?: number; sourceModIndex?: number; isSplit: boolean } | null = null
 
     const jsonString = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain')
     if (jsonString) {
@@ -720,6 +759,7 @@ function App() {
         item: draggedItem,
         sourceSection: dragSource.section,
         sourceIndex: dragSource.index,
+        sourceModIndex: dragSource.modIndex,
         isSplit: dragSource.isSplit
       }
     }
@@ -729,11 +769,11 @@ function App() {
       return
     }
 
-    const { item, sourceSection, sourceIndex, isSplit } = dropData
+    const { item, sourceSection, sourceIndex, sourceModIndex, isSplit } = dropData
 
     console.log('[SlotDrop] Dropped Item:', item.name, 'Category:', item.category.join(', '))
 
-    if (sourceSection === targetSection && sourceIndex === targetIndex) return
+    if (sourceSection === targetSection && sourceIndex === targetIndex && sourceModIndex === targetModIndex) return
 
     if (targetSection === 'extra') {
       const slotType = extraSlotConfig.slotTypes[targetIndex]
@@ -742,7 +782,7 @@ function App() {
       }
     }
 
-    if (!canEquip(item, targetSection, targetIndex)) {
+    if (!canEquip(item, targetSection, targetIndex, targetModIndex)) {
       console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
       return
     }
@@ -766,6 +806,50 @@ function App() {
         }
       }
 
+      // Logic for dropping into a mod slot
+      if (targetModIndex !== -1) {
+          // We are dropping a mod into a weapon
+          const weapon = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
+          if (!weapon) return prev // Should not happen
+          
+          // Create copy of weapon and mods
+          const newWeapon = { ...weapon, modifications: [...(weapon.modifications || [])] }
+          
+          // Ensure mods array is initialized (should be by default if supportedModifications exists)
+          if (!newWeapon.modifications) newWeapon.modifications = []
+          
+          // Place mod
+          newWeapon.modifications[targetModIndex] = { ...item, count: 1 }
+          
+          // Update weapon in loadout
+          ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = newWeapon
+          
+          // Handle source removal if needed
+          if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
+              if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+                  // Moved from another mod slot
+                  const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
+                  if (sourceWeapon && sourceWeapon.modifications) {
+                       // If source and target are same weapon, we already cloned it.
+                       if (sourceSection === targetSection && sourceIndex === targetIndex) {
+                           newWeapon.modifications[sourceModIndex] = null
+                       } else {
+                           const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                           newSourceWeapon.modifications[sourceModIndex] = null
+                           ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
+                       }
+                  }
+              } else {
+                  // Moved from a regular slot (e.g. backpack)
+                  const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+                  const remaining = (sourceItem?.count || 1) - 1 // Mods are count 1
+                  setItem(sourceSection as keyof LoadoutState, sourceIndex, remaining > 0 ? { ...sourceItem!, count: remaining } : null)
+              }
+          }
+          
+          return newLoadout
+      }
+
       const targetItem = getItem(targetSection, targetIndex)
       let amountToMove = item.count || 1
       let newTargetItem = { ...item }
@@ -786,18 +870,28 @@ function App() {
 
       // Update Source
       if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
-        const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
-        if (targetItem && targetItem.id !== item.id && !isSplit) {
-          // Swap
-          setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
+        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+            // Moving FROM a mod slot TO a regular slot (unequipping)
+            const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[sourceModIndex] = null
+                ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
+            }
         } else {
-          const currentSourceCount = sourceItem?.count || 1
-          const remaining = currentSourceCount - amountToMove
-          setItem(
-            sourceSection as keyof LoadoutState,
-            sourceIndex,
-            remaining > 0 ? { ...sourceItem!, count: remaining } : null
-          )
+            const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+            if (targetItem && targetItem.id !== item.id && !isSplit) {
+              // Swap
+              setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
+            } else {
+              const currentSourceCount = sourceItem?.count || 1
+              const remaining = currentSourceCount - amountToMove
+              setItem(
+                sourceSection as keyof LoadoutState,
+                sourceIndex,
+                remaining > 0 ? { ...sourceItem!, count: remaining } : null
+              )
+            }
         }
       }
 
@@ -824,7 +918,7 @@ function App() {
     console.log('[AppDrop] Handle global drop (potential unequip)')
     e.preventDefault()
     
-    let dropData: { item: Item; sourceSection: string; sourceIndex?: number } | null = null
+    let dropData: { item: Item; sourceSection: string; sourceIndex?: number; sourceModIndex?: number } | null = null
     const jsonString = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain')
     
     if (jsonString) {
@@ -832,11 +926,11 @@ function App() {
     }
     
     if (!dropData && draggedItem && dragSource) {
-        dropData = { item: draggedItem, sourceSection: dragSource.section, sourceIndex: dragSource.index }
+        dropData = { item: draggedItem, sourceSection: dragSource.section, sourceIndex: dragSource.index, sourceModIndex: dragSource.modIndex }
     }
 
     if (!dropData) return
-    const { item, sourceSection, sourceIndex } = dropData
+    const { item, sourceSection, sourceIndex, sourceModIndex } = dropData
 
     if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
       setLoadout((prev) => {
@@ -847,16 +941,26 @@ function App() {
             ? (newLoadout[sec] as (Item | null)[])[sourceIndex]
             : (newLoadout[sec] as Item | null)
 
-        const sourceItem = getItem()
-        const remaining = (sourceItem?.count || 1) - (item.count || 1)
-
-        if (sourceIndex !== -1 && Array.isArray(newLoadout[sec])) {
-          if (newLoadout[sec] === prev[sec]) {
-            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
-          }
-          ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = remaining > 0 ? { ...sourceItem!, count: remaining } : null
+        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+            // Unequip mod
+            const sourceWeapon = (newLoadout[sec] as (Item | null)[])[sourceIndex]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[sourceModIndex] = null
+                ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = newSourceWeapon
+            }
         } else {
-          ;(newLoadout[sec] as any) = remaining > 0 ? { ...sourceItem!, count: remaining } : null
+            const sourceItem = getItem()
+            const remaining = (sourceItem?.count || 1) - (item.count || 1)
+
+            if (sourceIndex !== -1 && Array.isArray(newLoadout[sec])) {
+              if (newLoadout[sec] === prev[sec]) {
+                ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+              }
+              ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = remaining > 0 ? { ...sourceItem!, count: remaining } : null
+            } else {
+              ;(newLoadout[sec] as any) = remaining > 0 ? { ...sourceItem!, count: remaining } : null
+            }
         }
 
         // Check Shield Compatibility if Augment removed
@@ -879,8 +983,8 @@ function App() {
     setHoveredItem(null)
   }
 
-  const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1) => {
-    console.log('[SlotClick] Section:', section, 'Index:', index, 'Shift:', e.shiftKey)
+  const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1, modIndex: number = -1) => {
+    console.log('[SlotClick] Section:', section, 'Index:', index, 'ModIndex:', modIndex, 'Shift:', e.shiftKey)
     if (e.shiftKey) {
       if (section === 'extra') {
         const slotType = extraSlotConfig.slotTypes[index]
@@ -893,13 +997,24 @@ function App() {
       setHoveredItem(null)
       setLoadout((prev) => {
         const newLoadout = { ...prev }
-        if (index !== -1 && Array.isArray(newLoadout[section])) {
-          if (newLoadout[section] === prev[section]) {
-            ;(newLoadout[section] as any) = [...(prev[section] as any[])]
-          }
-          ;(newLoadout[section] as (Item | null)[])[index] = null
+        
+        if (modIndex !== -1) {
+            // Unequip mod
+            const weapon = (newLoadout[section] as (Item | null)[])[index]
+            if (weapon && weapon.modifications) {
+                const newWeapon = { ...weapon, modifications: [...weapon.modifications] }
+                newWeapon.modifications[modIndex] = null
+                ;(newLoadout[section] as (Item | null)[])[index] = newWeapon
+            }
         } else {
-          ;(newLoadout[section] as any) = null
+            if (index !== -1 && Array.isArray(newLoadout[section])) {
+              if (newLoadout[section] === prev[section]) {
+                ;(newLoadout[section] as any) = [...(prev[section] as any[])]
+              }
+              ;(newLoadout[section] as (Item | null)[])[index] = null
+            } else {
+              ;(newLoadout[section] as any) = null
+            }
         }
 
         // Check Shield Compatibility if Augment removed
@@ -929,6 +1044,13 @@ function App() {
       Object.entries(item.recipe).forEach(([id, count]) => {
         totals[id] = (totals[id] || 0) + count * numCrafts
       })
+      
+      // Recurse for modifications
+      if (item.modifications) {
+          item.modifications.forEach(mod => {
+              if (mod) addItemRecipe(mod)
+          })
+      }
     }
 
     addItemRecipe(loadout.augment)
@@ -958,7 +1080,7 @@ function App() {
     const isDragging = !!draggedItem
     const isValid = isDragging ? canEquip(draggedItem!, section, index) : true
     const dropClass = isDragging ? (isValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
-    const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index
+    const isActiveSlot = activeSlot?.section === section && activeSlot?.index === index && activeSlot?.modIndex === undefined
     const isFixedSlot = section === 'extra' && (extraSlotConfig.slotTypes[index] === 'integrated_binoculars' || extraSlotConfig.slotTypes[index] === 'integrated_shield_recharger')
 
     let displayItem = item
@@ -1033,7 +1155,7 @@ function App() {
           e.stopPropagation()
           const newValidity = isValid ? 'valid' : 'invalid'
           if (dropValidity !== newValidity) setDropValidity(newValidity)
-          if (isDragging && (!activeSlot || activeSlot.section !== section || activeSlot.index !== index)) {
+          if (isDragging && (!activeSlot || activeSlot.section !== section || activeSlot.index !== index || activeSlot.modIndex !== undefined)) {
             setActiveSlot({ section, index })
           }
         }}
@@ -1083,6 +1205,80 @@ function App() {
                     min="1"
                   />
                 </div>
+              )}
+              {section === 'weapons' && displayItem.supportedModifications && (
+                 <div className="mod-slots-row">
+                     {displayItem.supportedModifications.map((modType, mIdx) => {
+                         const modItem = displayItem.modifications?.[mIdx]
+                         const isModActive = activeSlot?.section === section && activeSlot?.index === index && activeSlot?.modIndex === mIdx
+                         const isModValid = isDragging ? canEquip(draggedItem!, section, index, mIdx) : true
+                         const modDropClass = isDragging ? (isModValid ? 'valid-drop-target' : 'invalid-drop-target') : ''
+                         
+                         return (
+                             <div
+                                key={mIdx}
+                                ref={(el) => {
+                                  const key = `${section}|${index}|${mIdx}`
+                                  if (el) slotRefs.current.set(key, el)
+                                  else slotRefs.current.delete(key)
+                                }}
+                                className={`mod-slot ${isModActive ? 'active-slot' : ''} ${modDropClass}`}
+                                onDragOver={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    const newValidity = isModValid ? 'valid' : 'invalid'
+                                    if (dropValidity !== newValidity) setDropValidity(newValidity)
+                                    if (isDragging && (!activeSlot || activeSlot.section !== section || activeSlot.index !== index || activeSlot.modIndex !== mIdx)) {
+                                        setActiveSlot({ section, index, modIndex: mIdx })
+                                    }
+                                }}
+                                onDrop={(e) => {
+                                    console.log('[ModSlot] onDrop', section, index, mIdx)
+                                    handleSlotDrop(e, section, index, mIdx)
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleSlotClick(e, section, index, mIdx)
+                                }}
+                                title={modType}
+                             >
+                                {modItem ? (
+                                    <div 
+                                        className={`slot-item ${getRarityClass(modItem.rarity)}`}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.stopPropagation()
+                                            handleDragStart(e, modItem, section, index, mIdx)
+                                        }}
+                                        onDragEnd={handleDragEnd}
+                                        onMouseEnter={(e) => {
+                                            e.stopPropagation()
+                                            if (draggedItem) return
+                                            initialTooltipPos.current = { x: e.clientX, y: e.clientY }
+                                            setHoveredItem(modItem)
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.stopPropagation()
+                                            setHoveredItem(null)
+                                        }}
+                                    >
+                                        <div className="slot-item-content">
+                                            <div className="slot-item-top" style={{ padding: 0 }}>
+                                                {modItem.isImage ? (
+                                                  <img src={modItem.icon} alt={modItem.name} className="mod-slot-icon" draggable={false} />
+                                                ) : (
+                                                  <span className="slot-item-text" style={{ fontSize: '14px' }}>{modItem.icon}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <span style={{ fontSize: '10px', color: '#555', pointerEvents: 'none' }}>+</span>
+                                )}
+                             </div>
+                         )
+                     })}
+                 </div>
               )}
             </div>
           </div>
