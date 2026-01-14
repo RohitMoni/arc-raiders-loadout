@@ -49,6 +49,7 @@ interface Item {
   isIntegrated?: boolean
   supportedModifications?: string[]
   modifications?: (Item | null)[]
+  recyclesInto?: Record<string, number>
 }
 
 interface LoadoutState {
@@ -119,6 +120,7 @@ function App() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
   const [allItemData, setAllItemData] = useState<Record<string, Item>>({})
+  const [showRecycleList, setShowRecycleList] = useState(false)
   const [isInventoryLoaded, setIsInventoryLoaded] = useState(false)
   const [showLootTable, setShowLootTable] = useState(false)
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
@@ -248,6 +250,7 @@ function App() {
           shieldCompatibility: item.shieldCompatibility,
           slots: item.slots,
           supportedModifications: item.supportedModifications,
+          recyclesInto: item.recyclesInto,
         }
       })
       setAllItemData(lookup)
@@ -285,6 +288,7 @@ function App() {
             shieldCompatibility: item.shieldCompatibility,
             slots: item.slots,
             supportedModifications: item.supportedModifications,
+            recyclesInto: item.recyclesInto,
           }
         })
 
@@ -1120,6 +1124,45 @@ function App() {
       .sort((a, b) => b.count - a.count)
   }
 
+  const getRecycleList = (overrideLootTable?: LootItem[]) => {
+    const lootTable = overrideLootTable || getLootTable()
+    const requiredMap = new Map<string, number>()
+    lootTable.forEach(item => requiredMap.set(item.id, item.count))
+
+    const candidates = Object.values(allItemData).filter(item => 
+      item.category.includes('Recyclable') && item.recyclesInto
+    )
+
+    const scored = candidates.map(item => {
+      let score = 0
+      if (item.recyclesInto) {
+        Object.entries(item.recyclesInto).forEach(([matId, count]) => {
+          if (requiredMap.has(matId)) {
+            const reqCount = requiredMap.get(matId)!
+            const useful = Math.min(count, reqCount)
+            const mat = allItemData[matId]
+            const rarity = mat?.rarity || 'Common'
+            let weight = 1
+            switch (rarity) {
+              case 'Uncommon': weight = 2; break;
+              case 'Rare': weight = 4; break;
+              case 'Epic': weight = 8; break;
+              case 'Legendary': weight = 16; break;
+            }
+            score += useful * weight
+          }
+        })
+      }
+      return { item, score }
+    })
+
+    return scored
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(x => x.item)
+  }
+
   const handleShareLootList = () => {
     const lootTable = getLootTable()
     const simplifiedLoot = lootTable.reduce((acc, item) => {
@@ -1377,11 +1420,16 @@ function App() {
   if (mobileLootData) {
     return (
       <div className="mobile-loot-container">
-        <h1 className="mobile-loot-title">LOOT LIST</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '600px', alignItems: 'center', marginBottom: '24px' }}>
+          <h1 className="mobile-loot-title" style={{ margin: 0 }}>{showRecycleList ? 'RECYCLE LIST' : 'LOOT LIST'}</h1>
+          <button className="icon-btn" onClick={() => setShowRecycleList(!showRecycleList)} style={{ fontSize: '24px', padding: '8px' }}>
+            {showRecycleList ? '📋' : '♻️'}
+          </button>
+        </div>
         <div className="mobile-loot-list">
-          {mobileLootData.map((item) => (
+          {(showRecycleList ? getRecycleList(mobileLootData) : mobileLootData).map((item) => (
             <div key={item.id} className="mobile-loot-item">
-              <span className="mobile-loot-count">{item.count}</span>
+              {!showRecycleList && <span className="mobile-loot-count">{item.count}</span>}
               <div className="mobile-loot-icon">
                 {item.isImage ? <img src={item.icon} alt={item.name} /> : item.icon}
               </div>
@@ -1656,8 +1704,11 @@ function App() {
         <div className="loot-overlay" onClick={() => setShowLootTable(false)}>
           <div className="loot-modal" onClick={(e) => e.stopPropagation()}>
             <div className="loot-header">
-              <h3 className="loot-title">REQUIRED LOOT</h3>
+              <h3 className="loot-title">{showRecycleList ? 'BEST TO RECYCLE' : 'REQUIRED LOOT'}</h3>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <button className="icon-btn" onClick={() => setShowRecycleList(!showRecycleList)} title={showRecycleList ? "Show Loot List" : "Show Recycle List"}>
+                   {showRecycleList ? '📋' : '♻️'}
+                </button>
                 <button className="icon-btn" onClick={handleShareLootList} title="Share Mobile List">
                   <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
                 </button>
@@ -1667,9 +1718,9 @@ function App() {
               </div>
             </div>
             <div className="loot-list">
-              {getLootTable().map((item) => (
+              {(showRecycleList ? getRecycleList() : getLootTable()).map((item) => (
                 <div key={item.id} className="loot-item">
-                  <span className="loot-count">{item.count}</span>
+                  {!showRecycleList && <span className="loot-count">{item.count}</span>}
                   <div className="loot-icon">
                     {item.isImage ? <img src={item.icon} alt={item.name} /> : item.icon}
                   </div>
