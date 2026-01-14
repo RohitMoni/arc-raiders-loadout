@@ -222,13 +222,17 @@ function App() {
 
       const lookup: Record<string, Item> = {}
       normalizedItems.forEach((item: any) => {
-        let categories: string[] = item.categories
-        if (!categories) {
+        let categories: string[] = item.categories ? [...item.categories] : []
+        if (categories.length === 0) {
           let category = item.type || 'Material'
           if (item.fileName === 'raider_hatch_key.json') category = 'Key'
           else if (item.isWeapon) category = 'Weapon'
           else if (item.type === 'Modification') category = 'Modification'
           categories = [category]
+        }
+
+        if (categories.includes('Weapon') && !categories.includes('Gun')) {
+          categories.push('Gun')
         }
 
         lookup[item.id] = {
@@ -258,11 +262,15 @@ function App() {
           return hasValidType || isWeapon || isKey
         })
         .map((item: any, index: number) => {
-          let categories: string[] = item.categories
-          if (!categories) {
+          let categories: string[] = item.categories ? [...item.categories] : []
+          if (categories.length === 0) {
             let category = item.type
             if (item.isWeapon) category = 'Weapon'
             categories = [category]
+          }
+
+          if (categories.includes('Weapon') && !categories.includes('Gun')) {
+            categories.push('Gun')
           }
           return {
             id: item.id || `item-${index}`,
@@ -1461,7 +1469,10 @@ function App() {
                 className="inventory-search-bar"
                 placeholder="Search items..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  if (e.target.value) setActiveFilter('all')
+                }}
               />
               <div className="inventory-list">
                 {filteredItems.map((item) => {
