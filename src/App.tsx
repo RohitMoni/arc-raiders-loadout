@@ -79,6 +79,14 @@ interface SerializedLoadout {
   safePocket?: (SerializedItem | null)[]
 }
 
+interface LootItem {
+  id: string
+  count: number
+  name: string
+  icon: string
+  isImage: boolean
+}
+
 const emptyImg = new Image()
 emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
@@ -134,6 +142,7 @@ function App() {
     safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
   })
   const [hoveredItem, setHoveredItem] = useState<Item | null>(null)
+  const [mobileLootData, setMobileLootData] = useState<LootItem[] | null>(null)
 
   const extraSlotConfig = useMemo(() => {
     const augment = loadout.augment
@@ -472,6 +481,34 @@ function App() {
     
     // Check URL for loadout
     const path = window.location.pathname
+
+    // Check for Loot List URL
+    const lootListMatch = path.match(/^\/lootlist\/(.+)$/)
+    if (lootListMatch) {
+      try {
+        const encoded = decodeURIComponent(lootListMatch[1])
+        const json = atob(encoded)
+        const parsed: Record<string, number> = JSON.parse(json)
+
+        const list: LootItem[] = Object.entries(parsed).map(([id, count]) => {
+          const item = allItemData[id]
+          return {
+            id,
+            count,
+            name: item?.name || id,
+            icon: item?.icon || '📦',
+            isImage: item?.isImage || false,
+          }
+        }).sort((a, b) => b.count - a.count)
+
+        setMobileLootData(list)
+        console.log('[Persistence] Loot list restored from URL')
+        return
+      } catch (e) {
+        console.error('[Persistence] Failed to load loot list from URL', e)
+      }
+    }
+
     const urlMatch = path.match(/^\/loadout\/(.+)$/)
     if (urlMatch) {
       try {
@@ -498,7 +535,7 @@ function App() {
         console.error('[Persistence] Failed to load saved loadout', e)
       }
     }
-  }, [isInventoryLoaded, deserializeLoadout])
+  }, [isInventoryLoaded, deserializeLoadout, allItemData])
 
   // Save to LocalStorage on change
   useEffect(() => {
@@ -1075,6 +1112,22 @@ function App() {
       .sort((a, b) => b.count - a.count)
   }
 
+  const handleShareLootList = () => {
+    const lootTable = getLootTable()
+    const simplifiedLoot = lootTable.reduce((acc, item) => {
+      acc[item.id] = item.count
+      return acc
+    }, {} as Record<string, number>)
+
+    const json = JSON.stringify(simplifiedLoot)
+    const encoded = btoa(json)
+    const url = `${window.location.origin}/lootlist/${encodeURIComponent(encoded)}`
+
+    navigator.clipboard.writeText(url)
+      .then(() => alert('Mobile Loot List URL copied to clipboard!'))
+      .catch(err => console.error('Failed to copy', err))
+  }
+
   const renderSlot = (section: keyof LoadoutState, index: number = -1, className: string) => {
     const item = index === -1 ? (loadout[section] as Item | null) : (loadout[section] as (Item | null)[])[index]
     const isDragging = !!draggedItem
@@ -1307,6 +1360,28 @@ function App() {
       default:
         return 'rarity-common'
     }
+  }
+
+  if (mobileLootData) {
+    return (
+      <div className="mobile-loot-container">
+        <h1 className="mobile-loot-title">LOOT LIST</h1>
+        <div className="mobile-loot-list">
+          {mobileLootData.map((item) => (
+            <div key={item.id} className="mobile-loot-item">
+              <span className="mobile-loot-count">{item.count}</span>
+              <div className="mobile-loot-icon">
+                {item.isImage ? <img src={item.icon} alt={item.name} /> : item.icon}
+              </div>
+              <span className="mobile-loot-name">{item.name}</span>
+            </div>
+          ))}
+        </div>
+        <button className="mobile-home-btn" onClick={() => window.location.href = '/'}>
+          Create Your Own Loadout
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -1567,9 +1642,14 @@ function App() {
           <div className="loot-modal" onClick={(e) => e.stopPropagation()}>
             <div className="loot-header">
               <h3 className="loot-title">REQUIRED LOOT</h3>
-              <button className="close-btn" onClick={() => setShowLootTable(false)}>
-                ×
-              </button>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <button className="icon-btn" onClick={handleShareLootList} title="Share Mobile List">
+                  📱
+                </button>
+                <button className="close-btn" onClick={() => setShowLootTable(false)}>
+                  ×
+                </button>
+              </div>
             </div>
             <div className="loot-list">
               {getLootTable().map((item) => (
