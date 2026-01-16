@@ -158,6 +158,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-sizing: border-box;
   display: flex;
+  touch-action: none;
 }
 
 .spacer-slot {
@@ -225,6 +226,7 @@
   border-radius: 8px;
   cursor: grab;
   transition: background 0.2s;
+  touch-action: none;
 }
 
 .inventory-item-row:hover {
@@ -322,6 +324,7 @@
   isolation: isolate;
   box-sizing: border-box;
   min-width: 0;
+  touch-action: none;
 }
 
 .slot-item:active {

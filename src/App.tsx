@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
+import { InventoryPanel } from './components/InventoryPanel'
+import { LoadoutPanel } from './components/LoadoutPanel'
+import { EquipmentSection } from './components/EquipmentSection'
+import { useDragAndDrop } from './hooks/useDragAndDrop'
 import './App.css'
 
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -124,15 +128,8 @@ function App() {
   const [isInventoryLoaded, setIsInventoryLoaded] = useState(false)
   const [showLootTable, setShowLootTable] = useState(false)
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
-  const [draggedItem, setDraggedItem] = useState<Item | null>(null)
-  const ghostRef = useRef<HTMLDivElement>(null)
-  const tooltipRef = useRef<HTMLDivElement>(null)
-  const initialTooltipPos = useRef({ x: 0, y: 0 })
-  const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
-  const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
-  const [dragSource, setDragSource] = useState<{ section: string; index?: number; modIndex?: number; isSplit: boolean } | null>(null)
-  const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number; modIndex?: number } | null>(null)
+  const [hoveredItem, setHoveredItem] = useState<Item | null>(null)
+  const [mobileLootData, setMobileLootData] = useState<LootItem[] | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
     title: 'LOADOUT',
     augment: null,
@@ -143,8 +140,33 @@ function App() {
     extra: [],
     safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
   })
-  const [hoveredItem, setHoveredItem] = useState<Item | null>(null)
-  const [mobileLootData, setMobileLootData] = useState<LootItem[] | null>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+
+  const {
+    draggedItem,
+    setDraggedItem,
+    dropValidity,
+    setDropValidity,
+    dragSource,
+    setDragSource,
+    activeSlot,
+    setActiveSlot,
+    ghostRef,
+    slotRefs,
+    initialTooltipPos,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleLoadoutPanelDragOver,
+    handleLoadoutPanelDrop: handleLoadoutPanelDropHandler,
+    handleGlobalDragOverCapture,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useDragAndDrop({
+    canEquip: (item, slotType, slotIndex, modIndex) => 
+      canEquip(item, slotType, slotIndex, modIndex),
+  })
 
   const extraSlotConfig = useMemo(() => {
     const augment = loadout.augment
@@ -637,115 +659,6 @@ function App() {
     return augment.shieldCompatibility.includes(type)
   }
 
-  const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number, sourceModIndex?: number) => {
-    console.log('[DragStart] Item:', item.name, 'Category:', item.category.join(', '), 'Source:', sourceSection, 'Index:', sourceIndex, 'ModIndex:', sourceModIndex)
-    let dragItem = { ...item }
-    let isSplit = false
-
-    if (sourceSection === 'inventory' && item.stackSize) {
-      dragItem.count = item.stackSize
-    } else if (sourceSection !== 'inventory' && e.altKey && item.stackSize && (item.count || 1) > 1) {
-      const total = item.count || 1
-      const split = Math.floor(total / 2)
-      dragItem.count = split
-      isSplit = true
-    } else if (sourceSection !== 'inventory' && !dragItem.count) {
-      dragItem.count = 1
-    }
-
-    // Calculate slot centers for latching
-    slotCenters.current.clear()
-    slotRefs.current.forEach((el, key) => {
-      const rect = el.getBoundingClientRect()
-      slotCenters.current.set(key, {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      })
-    })
-
-    setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
-
-    const json = JSON.stringify({ item: dragItem, sourceSection, sourceIndex, sourceModIndex, isSplit })
-    e.dataTransfer.setData('application/json', json)
-    e.dataTransfer.setData('text/plain', json)
-    
-    setDraggedItem(dragItem)
-    e.dataTransfer.effectAllowed = 'move'
-
-    // Hide default drag image
-    e.dataTransfer.setDragImage(emptyImg, 0, 0)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedItem(null)
-    setDropValidity(null)
-    setActiveSlot(null)
-    setDragSource(null)
-  }
-
-  const handleDragOver = (e: DragEvent) => {
-    e.preventDefault()
-    if (activeSlot) setActiveSlot(null)
-    if (dropValidity !== null) setDropValidity(null)
-  }
-
-  const handleLoadoutPanelDragOver = (e: DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!draggedItem) return
-
-    let closestKey: string | null = null
-    let minDistance = Infinity
-    const threshold = 80 // px
-
-    slotCenters.current.forEach((center, key) => {
-      const dist = Math.sqrt(Math.pow(e.clientX - center.x, 2) + Math.pow(e.clientY - center.y, 2))
-      if (dist < minDistance) {
-        minDistance = dist
-        closestKey = key
-      }
-    })
-
-    if (closestKey && minDistance < threshold) {
-      const [section, indexStr, modIndexStr] = (closestKey as string).split('|')
-      const index = parseInt(indexStr)
-      const modIndex = modIndexStr ? parseInt(modIndexStr) : undefined
-
-      if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index || activeSlot.modIndex !== modIndex) {
-        const isValid = canEquip(draggedItem, section, index, modIndex)
-        console.log('[DragOver] New Active Slot:', section, index, modIndex, 'Valid:', isValid)
-        setActiveSlot({ section: section as keyof LoadoutState, index, modIndex })
-        setDropValidity(isValid ? 'valid' : 'invalid')
-      }
-    } else {
-      if (activeSlot) {
-        console.log('[DragOver] Clearing Active Slot')
-        setActiveSlot(null)
-      }
-      if (dropValidity !== null) setDropValidity(null)
-    }
-  }
-
-  const handleLoadoutPanelDrop = (e: DragEvent) => {
-    console.log('[PanelDrop] Drop on panel. ActiveSlot:', activeSlot)
-    e.preventDefault()
-    e.stopPropagation()
-    if (activeSlot) {
-      handleSlotDrop(e, activeSlot.section, activeSlot.index, activeSlot.modIndex)
-    } else {
-      console.log('[PanelDrop] No active slot to drop into.')
-    }
-  }
-
-  const handleGlobalDragOverCapture = (e: DragEvent) => {
-    // Track cursor directly on the DOM element to avoid re-renders
-    if (ghostRef.current) {
-      ghostRef.current.style.left = `${e.clientX - 65}px`
-      ghostRef.current.style.top = `${e.clientY - 65}px`
-    }
-    e.preventDefault()
-  }
-
   const canEquip = (item: Item, slotType: string, slotIndex: number = -1, modIndex: number = -1) => {
     const categories = item.category
 
@@ -784,6 +697,219 @@ function App() {
     return false
   }
 
+  const handleLoadoutPanelDrop = (e: DragEvent) => {
+    handleLoadoutPanelDropHandler(e, (event, section, index, modIndex) =>
+      handleSlotDrop(event, section, index, modIndex)
+    )
+  }
+
+  const handleItemEquip = (
+    item: Item,
+    sourceSection: string,
+    sourceIndex: number | undefined,
+    sourceModIndex: number | undefined,
+    isSplit: boolean,
+    targetSection: keyof LoadoutState,
+    targetIndex: number = -1,
+    targetModIndex: number = -1
+  ) => {
+    console.log('[ItemEquip] Item:', item.name, 'From:', sourceSection, sourceIndex, 'To:', targetSection, targetIndex)
+
+    if (sourceSection === targetSection && sourceIndex === targetIndex && sourceModIndex === targetModIndex) return
+
+    if (targetSection === 'extra') {
+      const slotType = extraSlotConfig.slotTypes[targetIndex]
+      if (slotType === 'integrated_binoculars' || slotType === 'integrated_shield_recharger') {
+        return
+      }
+    }
+
+    if (!canEquip(item, targetSection, targetIndex, targetModIndex)) {
+      console.log('[ItemEquip] Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
+      return
+    }
+
+    setLoadout((prev) => {
+      const newLoadout = { ...prev }
+
+      const getItem = (sec: keyof LoadoutState, idx: number) => {
+        if (idx !== -1 && Array.isArray(newLoadout[sec])) return (newLoadout[sec] as (Item | null)[])[idx]
+        return newLoadout[sec] as Item | null
+      }
+
+      const setItem = (sec: keyof LoadoutState, idx: number, val: Item | null) => {
+        if (idx !== -1 && Array.isArray(newLoadout[sec])) {
+          if (newLoadout[sec] === prev[sec]) {
+            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+          }
+          ;(newLoadout[sec] as (Item | null)[])[idx] = val
+        } else {
+          ;(newLoadout[sec] as any) = val
+        }
+      }
+
+      // Logic for dropping into a mod slot
+      if (targetModIndex !== -1) {
+          const weapon = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
+          if (!weapon) return prev
+          
+          const newWeapon = { ...weapon, modifications: [...(weapon.modifications || [])] }
+          if (!newWeapon.modifications) newWeapon.modifications = []
+          
+          newWeapon.modifications[targetModIndex] = { ...item, count: 1 }
+          ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = newWeapon
+          
+          if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
+              if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+                  const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
+                  if (sourceWeapon && sourceWeapon.modifications) {
+                       if (sourceSection === targetSection && sourceIndex === targetIndex) {
+                           newWeapon.modifications[sourceModIndex] = null
+                       } else {
+                           const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                           newSourceWeapon.modifications[sourceModIndex] = null
+                           ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
+                       }
+                  }
+              } else {
+                  const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+                  const remaining = (sourceItem?.count || 1) - 1
+                  setItem(sourceSection as keyof LoadoutState, sourceIndex, remaining > 0 ? { ...sourceItem!, count: remaining } : null)
+              }
+          }
+          
+          return newLoadout
+      }
+
+      const targetItem = getItem(targetSection, targetIndex)
+      let amountToMove = item.count || 1
+      let newTargetItem = { ...item }
+
+      if (targetItem && targetItem.id === item.id && targetItem.stackSize) {
+        const space = targetItem.stackSize - (targetItem.count || 1)
+        amountToMove = Math.min(amountToMove, space)
+        newTargetItem = { ...targetItem, count: (targetItem.count || 1) + amountToMove }
+      } else {
+        if (targetItem && isSplit) return prev
+        newTargetItem = { ...item, count: amountToMove }
+      }
+
+      if (amountToMove === 0) return prev
+
+      setItem(targetSection, targetIndex, newTargetItem)
+
+      if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
+        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+            const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[sourceModIndex] = null
+                ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
+            }
+        } else {
+            const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+            if (targetItem && targetItem.id !== item.id && !isSplit) {
+              setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
+            } else {
+              const currentSourceCount = sourceItem?.count || 1
+              const remaining = currentSourceCount - amountToMove
+              setItem(
+                sourceSection as keyof LoadoutState,
+                sourceIndex,
+                remaining > 0 ? { ...sourceItem!, count: remaining } : null
+              )
+            }
+        }
+      }
+
+      if (targetSection === 'augment' || sourceSection === 'augment') {
+        const currentAugment = newLoadout.augment
+        const currentShield = newLoadout.shield
+        if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+          console.log('[Loadout] Removing incompatible shield:', currentShield.name)
+          newLoadout.shield = null
+        }
+      }
+
+      return newLoadout
+    })
+    setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
+    setDragSource(null)
+    setHoveredItem(null)
+  }
+
+  const handleTouchSlotDrop = (section: keyof LoadoutState, index: number = -1, modIndex: number = -1) => {
+    console.log('[TouchSlotDrop] Target:', section, index, modIndex)
+    
+    if (!draggedItem || !dragSource) {
+      console.log('[TouchSlotDrop] No dragged item or source')
+      return
+    }
+
+    const item = draggedItem
+    const sourceSection = dragSource.section
+    const sourceIndex = dragSource.index
+    const sourceModIndex = dragSource.modIndex
+    const isSplit = dragSource.isSplit
+
+    handleItemEquip(item, sourceSection, sourceIndex, sourceModIndex, isSplit, section, index, modIndex)
+  }
+
+  const handleTouchInventoryDrop = () => {
+    console.log('[TouchInventoryDrop] Touch ended on inventory panel')
+    if (!draggedItem || !dragSource) return
+    
+    // Only unequip if dragging FROM equipment (not from inventory)
+    if (dragSource.section === 'inventory') {
+      console.log('[TouchInventoryDrop] Source is already inventory, ignoring')
+      return
+    }
+
+    const { section, index, modIndex } = dragSource
+
+    // Unequip the item
+    if (index !== undefined) {
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        const sec = section as keyof LoadoutState
+
+        if (modIndex !== undefined && modIndex !== -1) {
+            // Unequip mod
+            const sourceWeapon = (newLoadout[sec] as (Item | null)[])[index]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[modIndex] = null
+                ;(newLoadout[sec] as (Item | null)[])[index] = newSourceWeapon
+            }
+        } else {
+            // Unequip regular item
+            if (index !== -1 && Array.isArray(newLoadout[sec])) {
+              if (newLoadout[sec] === prev[sec]) {
+                ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+              }
+              ;(newLoadout[sec] as (Item | null)[])[index] = null
+            } else {
+              ;(newLoadout[sec] as any) = null
+            }
+        }
+
+        // Check Shield Compatibility if Augment removed
+        if (sec === 'augment') {
+           const currentAugment = newLoadout.augment
+           const currentShield = newLoadout.shield
+           if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+             console.log('[TouchInventoryDrop] Removing incompatible shield after augment unequip')
+             newLoadout.shield = null
+           }
+        }
+
+        return newLoadout
+      })
+    }
+  }
+
   const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1, targetModIndex: number = -1) => {
     console.log('[SlotDrop] Target:', targetSection, targetIndex, targetModIndex)
     e.preventDefault()
@@ -819,148 +945,9 @@ function App() {
     }
 
     const { item, sourceSection, sourceIndex, sourceModIndex, isSplit } = dropData
-
     console.log('[SlotDrop] Dropped Item:', item.name, 'Category:', item.category.join(', '))
 
-    if (sourceSection === targetSection && sourceIndex === targetIndex && sourceModIndex === targetModIndex) return
-
-    if (targetSection === 'extra') {
-      const slotType = extraSlotConfig.slotTypes[targetIndex]
-      if (slotType === 'integrated_binoculars' || slotType === 'integrated_shield_recharger') {
-        return
-      }
-    }
-
-    if (!canEquip(item, targetSection, targetIndex, targetModIndex)) {
-      console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
-      return
-    }
-
-    setLoadout((prev) => {
-      const newLoadout = { ...prev }
-
-      const getItem = (sec: keyof LoadoutState, idx: number) => {
-        if (idx !== -1 && Array.isArray(newLoadout[sec])) return (newLoadout[sec] as (Item | null)[])[idx]
-        return newLoadout[sec] as Item | null
-      }
-
-      const setItem = (sec: keyof LoadoutState, idx: number, val: Item | null) => {
-        if (idx !== -1 && Array.isArray(newLoadout[sec])) {
-          if (newLoadout[sec] === prev[sec]) {
-            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
-          }
-          ;(newLoadout[sec] as (Item | null)[])[idx] = val
-        } else {
-          ;(newLoadout[sec] as any) = val
-        }
-      }
-
-      // Logic for dropping into a mod slot
-      if (targetModIndex !== -1) {
-          // We are dropping a mod into a weapon
-          const weapon = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
-          if (!weapon) return prev // Should not happen
-          
-          // Create copy of weapon and mods
-          const newWeapon = { ...weapon, modifications: [...(weapon.modifications || [])] }
-          
-          // Ensure mods array is initialized (should be by default if supportedModifications exists)
-          if (!newWeapon.modifications) newWeapon.modifications = []
-          
-          // Place mod
-          newWeapon.modifications[targetModIndex] = { ...item, count: 1 }
-          
-          // Update weapon in loadout
-          ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = newWeapon
-          
-          // Handle source removal if needed
-          if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
-              if (sourceModIndex !== undefined && sourceModIndex !== -1) {
-                  // Moved from another mod slot
-                  const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
-                  if (sourceWeapon && sourceWeapon.modifications) {
-                       // If source and target are same weapon, we already cloned it.
-                       if (sourceSection === targetSection && sourceIndex === targetIndex) {
-                           newWeapon.modifications[sourceModIndex] = null
-                       } else {
-                           const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
-                           newSourceWeapon.modifications[sourceModIndex] = null
-                           ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
-                       }
-                  }
-              } else {
-                  // Moved from a regular slot (e.g. backpack)
-                  const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
-                  const remaining = (sourceItem?.count || 1) - 1 // Mods are count 1
-                  setItem(sourceSection as keyof LoadoutState, sourceIndex, remaining > 0 ? { ...sourceItem!, count: remaining } : null)
-              }
-          }
-          
-          return newLoadout
-      }
-
-      const targetItem = getItem(targetSection, targetIndex)
-      let amountToMove = item.count || 1
-      let newTargetItem = { ...item }
-
-      // Merge logic
-      if (targetItem && targetItem.id === item.id && targetItem.stackSize) {
-        const space = targetItem.stackSize - (targetItem.count || 1)
-        amountToMove = Math.min(amountToMove, space)
-        newTargetItem = { ...targetItem, count: (targetItem.count || 1) + amountToMove }
-      } else {
-        if (targetItem && isSplit) return prev // Cannot swap on split
-        newTargetItem = { ...item, count: amountToMove }
-      }
-
-      if (amountToMove === 0) return prev
-
-      setItem(targetSection, targetIndex, newTargetItem)
-
-      // Update Source
-      if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
-        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
-            // Moving FROM a mod slot TO a regular slot (unequipping)
-            const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
-            if (sourceWeapon && sourceWeapon.modifications) {
-                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
-                newSourceWeapon.modifications[sourceModIndex] = null
-                ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
-            }
-        } else {
-            const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
-            if (targetItem && targetItem.id !== item.id && !isSplit) {
-              // Swap
-              setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
-            } else {
-              const currentSourceCount = sourceItem?.count || 1
-              const remaining = currentSourceCount - amountToMove
-              setItem(
-                sourceSection as keyof LoadoutState,
-                sourceIndex,
-                remaining > 0 ? { ...sourceItem!, count: remaining } : null
-              )
-            }
-        }
-      }
-
-      // Check Shield Compatibility if Augment changed
-      if (targetSection === 'augment' || sourceSection === 'augment') {
-        const currentAugment = newLoadout.augment
-        const currentShield = newLoadout.shield
-        if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
-          console.log('[Loadout] Removing incompatible shield:', currentShield.name)
-          newLoadout.shield = null
-        }
-      }
-
-      return newLoadout
-    })
-    setDraggedItem(null)
-    setDropValidity(null)
-    setActiveSlot(null)
-    setDragSource(null)
-    setHoveredItem(null)
+    handleItemEquip(item, sourceSection, sourceIndex, sourceModIndex, isSplit, targetSection, targetIndex, targetModIndex)
   }
 
   const handleAppDrop = (e: DragEvent) => {
@@ -1030,6 +1017,83 @@ function App() {
     setActiveSlot(null)
     setDragSource(null)
     setHoveredItem(null)
+  }
+
+  const handleInventoryDrop = (e: DragEvent) => {
+    console.log('[InventoryDrop] Item dropped on inventory panel')
+    e.preventDefault()
+    e.stopPropagation()
+    
+    let dropData: { item: Item; sourceSection: string; sourceIndex?: number; sourceModIndex?: number } | null = null
+    const jsonString = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain')
+    
+    if (jsonString) {
+       try { dropData = JSON.parse(jsonString) } catch (e) { console.error(e) }
+    }
+    
+    if (!dropData && draggedItem && dragSource) {
+        dropData = { item: draggedItem, sourceSection: dragSource.section, sourceIndex: dragSource.index, sourceModIndex: dragSource.modIndex }
+    }
+
+    if (!dropData) return
+    const { sourceSection, sourceIndex, sourceModIndex } = dropData
+
+    // Only unequip if dragging FROM equipment (not from inventory to inventory)
+    if (sourceSection === 'inventory') {
+      console.log('[InventoryDrop] Source is already inventory, ignoring')
+      return
+    }
+
+    // Unequip the item
+    if (sourceIndex !== undefined) {
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        const sec = sourceSection as keyof LoadoutState
+
+        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+            // Unequip mod
+            const sourceWeapon = (newLoadout[sec] as (Item | null)[])[sourceIndex]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[sourceModIndex] = null
+                ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = newSourceWeapon
+            }
+        } else {
+            // Unequip regular item
+            if (sourceIndex !== -1 && Array.isArray(newLoadout[sec])) {
+              if (newLoadout[sec] === prev[sec]) {
+                ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+              }
+              ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = null
+            } else {
+              ;(newLoadout[sec] as any) = null
+            }
+        }
+
+        // Check Shield Compatibility if Augment removed
+        if (sec === 'augment') {
+           const currentAugment = newLoadout.augment
+           const currentShield = newLoadout.shield
+           if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+             console.log('[InventoryDrop] Removing incompatible shield after augment unequip')
+             newLoadout.shield = null
+           }
+        }
+
+        return newLoadout
+      })
+    }
+    
+    setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
+    setDragSource(null)
+    setHoveredItem(null)
+  }
+
+  const handleInventoryDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1, modIndex: number = -1) => {
@@ -1275,6 +1339,9 @@ function App() {
             draggable={!isFixedSlot}
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
+            onTouchStart={(e) => handleTouchStart(e, displayItem, section, index)}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={(e) => handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)}
             onMouseEnter={(e) => {
               if (draggedItem) return
               initialTooltipPos.current = { x: e.clientX, y: e.clientY }
@@ -1356,6 +1423,15 @@ function App() {
                                             handleDragStart(e, modItem, section, index, mIdx)
                                         }}
                                         onDragEnd={handleDragEnd}
+                                        onTouchStart={(e) => {
+                                            e.stopPropagation()
+                                            handleTouchStart(e, modItem, section, index, mIdx)
+                                        }}
+                                        onTouchMove={handleTouchMove}
+                                        onTouchEnd={(e) => {
+                                            e.stopPropagation()
+                                            handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)
+                                        }}
                                         onMouseEnter={(e) => {
                                             e.stopPropagation()
                                             if (draggedItem) return
@@ -1456,213 +1532,80 @@ function App() {
         onDragOverCapture={handleGlobalDragOverCapture}
         onDrop={handleAppDrop}
       >
-        <div className="box inventory-panel">
-          <div className="panel-title-row">
-            <h1 className="panel-title">INVENTORY</h1>
+        <InventoryPanel
+          filteredItems={filteredItems}
+          selectedVariantMap={selectedVariantMap}
+          onVariantSelect={(itemId, variantId) =>
+            setSelectedVariantMap((prev) => ({ ...prev, [itemId]: variantId }))
+          }
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={(e) => handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)}
+          onDrop={handleInventoryDrop}
+          onDragOver={handleInventoryDragOver}
+          getRarityClass={getRarityClass}
+          activeFilter={activeFilter}
+          search={search}
+          onSearchChange={setSearch}
+          onFilterChange={setActiveFilter}
+        />
+        <LoadoutPanel
+          loadout={loadout}
+          onTitleChange={(title) => setLoadout((prev) => ({ ...prev, title }))}
+          onLoadoutPanelDragOver={handleLoadoutPanelDragOver}
+          onLoadoutPanelDrop={handleLoadoutPanelDrop}
+          onShowLootTable={() => setShowLootTable(true)}
+          onShare={handleShare}
+          onReset={handleReset}
+        >
+          <EquipmentSection renderSlot={renderSlot} />
+          <div className="column-middle">
+            {loadout.backpack.length > 0 && (
+              <>
+                <h3 className="section-title">BACKPACK</h3>
+                <div className="backpack-grid">
+                  {loadout.backpack.map((_, i) => (
+                    <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-          <div className="inventory-content">
-            <div className="inventory-sidebar">
-              <button
-                className={`filter-btn ${activeFilter === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('all')}
-                title="All"
-              >
-                ♾️
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Weapon' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Weapon')}
-                title="Weapons"
-              >
-                🔫
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Quick Use' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Quick Use')}
-                title="Quick Use"
-              >
-                ❤️
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Ammunition' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Ammunition')}
-                title="Ammunition"
-              >
-                📦
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Modification' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Modification')}
-                title="Mods"
-              >
-                🔧
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Shield' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Shield')}
-                title="Shields"
-              >
-                🛡️
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Augment' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Augment')}
-                title="Augments"
-              >
-                ✨
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Key' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Key')}
-                title="Keys"
-              >
-                🔑
-              </button>
-            </div>
-            <div className="inventory-main">
-              <input
-                type="text"
-                className="inventory-search-bar"
-                placeholder="Search items..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  if (e.target.value) setActiveFilter('all')
-                }}
-              />
-              <div className="inventory-list">
-                {filteredItems.map((item) => {
-                  const selectedId = selectedVariantMap[item.id]
-                  const activeItem =
-                    selectedId && item.variants
-                      ? item.variants.find((v) => v.id === selectedId) || item
-                      : item
+          <div className="column-right">
+            <div className="sub-section">
+              <h3 className="section-title">QUICK USE</h3>
+              <div className="quick-use-grid">
+                {loadout.quickUse.map((_, i) => (
+                  <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
+                ))}
+              </div>
 
-                  return (
-                    <div
-                      key={item.id}
-                      className={`inventory-item-row ${getRarityClass(activeItem.rarity)}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, activeItem, 'inventory')}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <div className="item-icon-placeholder">
-                        {activeItem.isImage ? (
-                          <img src={activeItem.icon} alt={activeItem.name} className="item-icon-image" />
-                        ) : (
-                          activeItem.icon
-                        )}
-                      </div>
-                      <div className="item-info">
-                        <span className="item-name">{activeItem.name}</span>
-                      </div>
-                      {item.variants && item.variants.length > 1 && (
-                        <div className="tier-selector">
-                          {item.variants.map((v, idx) => (
-                            <button
-                              key={v.id}
-                              className={`tier-btn ${activeItem.id === v.id ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                console.log('[Inventory] Selected Variant:', v.id, 'for item:', item.id)
-                                setSelectedVariantMap((prev) => ({ ...prev, [item.id]: v.id }))
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                            >
-                              {['I', 'II', 'III', 'IV', 'V'][idx] || idx + 1}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+              <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+                {extraSlotConfig.types.join(' / ') || 'EXTRA'}
+              </h3>
+              <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+                {loadout.extra.map((_, i) => (
+                  <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
+                ))}
+                {Array.from({ length: Math.max(0, 3 - loadout.extra.length) }).map((_, i) => (
+                  <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                ))}
+              </div>
+
+              <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
+              <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
+                {loadout.safePocket.map((_, i) => (
+                  <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
+                ))}
+                {Array.from({ length: Math.max(0, 3 - loadout.safePocket.length) }).map((_, i) => (
+                  <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-        <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver} onDrop={handleLoadoutPanelDrop}>
-          <div className="panel-title-row">
-            <div style={{ flex: 1 }}>
-              <input
-                className="panel-title-input"
-                value={loadout.title}
-                onChange={(e) => setLoadout(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="NAME YOUR LOADOUT"
-              />
-            </div>
-          </div>
-          <div className="loadout-actions-row">
-            <button className="loot-btn" onClick={() => setShowLootTable(true)}>LOOT LIST</button>
-            <button className="loot-btn" onClick={handleShare} title="Copy Loadout URL">
-              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor" style={{ marginRight: '8px' }}><path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
-              SHARE LOADOUT
-            </button>
-            <button className="loot-btn" onClick={handleReset} title="Reset Loadout">RESET</button>
-          </div>
-          <div className="loadout-links-row">
-            <a href="https://github.com/RohitMoni/arc-raiders-loadout/issues" target="_blank" rel="noreferrer" className="small-btn">Report Issue</a>
-            <a href="https://github.com/RohitMoni/arc-raiders-loadout/issues" target="_blank" rel="noreferrer" className="small-btn">Suggest Feature</a>
-            <a href="https://buymeacoffee.com/jaklite" target="_blank" rel="noreferrer" className="small-btn coffee-btn">
-              <span>☕</span> Buy me a coffee
-            </a>
-          </div>
-          <div className="content-grid">
-            <div className="column-left">
-              <h3 className="section-title">EQUIPMENT</h3>
-              <div className="augment-shield-row">
-                {renderSlot('augment', -1, 'augment-slot')}
-                {renderSlot('shield', -1, 'shield-slot')}
-              </div>
-              {renderSlot('weapons', 0, 'weapon-slot')}
-              {renderSlot('weapons', 1, 'weapon-slot')}
-            </div>
-            <div className="column-middle">
-              {loadout.backpack.length > 0 && (
-                <>
-                  <h3 className="section-title">BACKPACK</h3>
-                  <div className="backpack-grid">
-                    {loadout.backpack.map((_, i) => (
-                      <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="column-right">
-              <div className="sub-section">
-                <h3 className="section-title">QUICK USE</h3>
-                <div className="quick-use-grid">
-                  {loadout.quickUse.map((_, i) => (
-                    <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
-                  ))}
-                </div>
-
-                <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
-                  {extraSlotConfig.types.join(' / ') || 'EXTRA'}
-                </h3>
-                <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
-                  {loadout.extra.map((_, i) => (
-                    <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
-                  ))}
-                  {Array.from({ length: Math.max(0, 3 - loadout.extra.length) }).map((_, i) => (
-                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
-                  ))}
-                </div>
-
-                <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
-                <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
-                  {loadout.safePocket.map((_, i) => (
-                    <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
-                  ))}
-                  {Array.from({ length: Math.max(0, 3 - loadout.safePocket.length) }).map((_, i) => (
-                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        </LoadoutPanel>
       </div>
 
       {draggedItem && (
