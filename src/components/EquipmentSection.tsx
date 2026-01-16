@@ -1,5 +1,3 @@
-import { DragEvent } from 'react'
-
 interface Item {
   id: string
   name: string

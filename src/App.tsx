@@ -3,6 +3,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react'
 import { InventoryPanel } from './components/InventoryPanel'
 import { LoadoutPanel } from './components/LoadoutPanel'
 import { EquipmentSection } from './components/EquipmentSection'
+import { useDragAndDrop } from './hooks/useDragAndDrop'
 import './App.css'
 
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -127,15 +128,8 @@ function App() {
   const [isInventoryLoaded, setIsInventoryLoaded] = useState(false)
   const [showLootTable, setShowLootTable] = useState(false)
   const [selectedVariantMap, setSelectedVariantMap] = useState<Record<string, string>>({})
-  const [draggedItem, setDraggedItem] = useState<Item | null>(null)
-  const ghostRef = useRef<HTMLDivElement>(null)
-  const tooltipRef = useRef<HTMLDivElement>(null)
-  const initialTooltipPos = useRef({ x: 0, y: 0 })
-  const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
-  const [dropValidity, setDropValidity] = useState<'valid' | 'invalid' | null>(null)
-  const [dragSource, setDragSource] = useState<{ section: string; index?: number; modIndex?: number; isSplit: boolean } | null>(null)
-  const [activeSlot, setActiveSlot] = useState<{ section: keyof LoadoutState; index: number; modIndex?: number } | null>(null)
+  const [hoveredItem, setHoveredItem] = useState<Item | null>(null)
+  const [mobileLootData, setMobileLootData] = useState<LootItem[] | null>(null)
   const [loadout, setLoadout] = useState<LoadoutState>({
     title: 'LOADOUT',
     augment: null,
@@ -146,8 +140,30 @@ function App() {
     extra: [],
     safePocket: Array(DEFAULT_SLOTS.safePocket).fill(null),
   })
-  const [hoveredItem, setHoveredItem] = useState<Item | null>(null)
-  const [mobileLootData, setMobileLootData] = useState<LootItem[] | null>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+
+  const {
+    draggedItem,
+    setDraggedItem,
+    dropValidity,
+    setDropValidity,
+    dragSource,
+    setDragSource,
+    activeSlot,
+    setActiveSlot,
+    ghostRef,
+    slotRefs,
+    initialTooltipPos,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleLoadoutPanelDragOver,
+    handleLoadoutPanelDrop: handleLoadoutPanelDropHandler,
+    handleGlobalDragOverCapture,
+  } = useDragAndDrop({
+    canEquip: (item, slotType, slotIndex, modIndex) => 
+      canEquip(item, slotType, slotIndex, modIndex),
+  })
 
   const extraSlotConfig = useMemo(() => {
     const augment = loadout.augment
@@ -640,115 +656,6 @@ function App() {
     return augment.shieldCompatibility.includes(type)
   }
 
-  const handleDragStart = (e: DragEvent, item: Item, sourceSection: string, sourceIndex?: number, sourceModIndex?: number) => {
-    console.log('[DragStart] Item:', item.name, 'Category:', item.category.join(', '), 'Source:', sourceSection, 'Index:', sourceIndex, 'ModIndex:', sourceModIndex)
-    let dragItem = { ...item }
-    let isSplit = false
-
-    if (sourceSection === 'inventory' && item.stackSize) {
-      dragItem.count = item.stackSize
-    } else if (sourceSection !== 'inventory' && e.altKey && item.stackSize && (item.count || 1) > 1) {
-      const total = item.count || 1
-      const split = Math.floor(total / 2)
-      dragItem.count = split
-      isSplit = true
-    } else if (sourceSection !== 'inventory' && !dragItem.count) {
-      dragItem.count = 1
-    }
-
-    // Calculate slot centers for latching
-    slotCenters.current.clear()
-    slotRefs.current.forEach((el, key) => {
-      const rect = el.getBoundingClientRect()
-      slotCenters.current.set(key, {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      })
-    })
-
-    setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
-
-    const json = JSON.stringify({ item: dragItem, sourceSection, sourceIndex, sourceModIndex, isSplit })
-    e.dataTransfer.setData('application/json', json)
-    e.dataTransfer.setData('text/plain', json)
-    
-    setDraggedItem(dragItem)
-    e.dataTransfer.effectAllowed = 'move'
-
-    // Hide default drag image
-    e.dataTransfer.setDragImage(emptyImg, 0, 0)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedItem(null)
-    setDropValidity(null)
-    setActiveSlot(null)
-    setDragSource(null)
-  }
-
-  const handleDragOver = (e: DragEvent) => {
-    e.preventDefault()
-    if (activeSlot) setActiveSlot(null)
-    if (dropValidity !== null) setDropValidity(null)
-  }
-
-  const handleLoadoutPanelDragOver = (e: DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!draggedItem) return
-
-    let closestKey: string | null = null
-    let minDistance = Infinity
-    const threshold = 80 // px
-
-    slotCenters.current.forEach((center, key) => {
-      const dist = Math.sqrt(Math.pow(e.clientX - center.x, 2) + Math.pow(e.clientY - center.y, 2))
-      if (dist < minDistance) {
-        minDistance = dist
-        closestKey = key
-      }
-    })
-
-    if (closestKey && minDistance < threshold) {
-      const [section, indexStr, modIndexStr] = (closestKey as string).split('|')
-      const index = parseInt(indexStr)
-      const modIndex = modIndexStr ? parseInt(modIndexStr) : undefined
-
-      if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index || activeSlot.modIndex !== modIndex) {
-        const isValid = canEquip(draggedItem, section, index, modIndex)
-        console.log('[DragOver] New Active Slot:', section, index, modIndex, 'Valid:', isValid)
-        setActiveSlot({ section: section as keyof LoadoutState, index, modIndex })
-        setDropValidity(isValid ? 'valid' : 'invalid')
-      }
-    } else {
-      if (activeSlot) {
-        console.log('[DragOver] Clearing Active Slot')
-        setActiveSlot(null)
-      }
-      if (dropValidity !== null) setDropValidity(null)
-    }
-  }
-
-  const handleLoadoutPanelDrop = (e: DragEvent) => {
-    console.log('[PanelDrop] Drop on panel. ActiveSlot:', activeSlot)
-    e.preventDefault()
-    e.stopPropagation()
-    if (activeSlot) {
-      handleSlotDrop(e, activeSlot.section, activeSlot.index, activeSlot.modIndex)
-    } else {
-      console.log('[PanelDrop] No active slot to drop into.')
-    }
-  }
-
-  const handleGlobalDragOverCapture = (e: DragEvent) => {
-    // Track cursor directly on the DOM element to avoid re-renders
-    if (ghostRef.current) {
-      ghostRef.current.style.left = `${e.clientX - 65}px`
-      ghostRef.current.style.top = `${e.clientY - 65}px`
-    }
-    e.preventDefault()
-  }
-
   const canEquip = (item: Item, slotType: string, slotIndex: number = -1, modIndex: number = -1) => {
     const categories = item.category
 
@@ -785,6 +692,12 @@ function App() {
     if (categories.includes('Quick Use') && (slotType === 'backpack' || slotType === 'quickUse' || slotType === 'safePocket')) return true
     if (categories.includes('Key') && (slotType === 'backpack' || slotType === 'safePocket')) return true
     return false
+  }
+
+  const handleLoadoutPanelDrop = (e: DragEvent) => {
+    handleLoadoutPanelDropHandler(e, (event, section, index, modIndex) =>
+      handleSlotDrop(event, section, index, modIndex)
+    )
   }
 
   const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1, targetModIndex: number = -1) => {
