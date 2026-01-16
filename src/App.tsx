@@ -421,40 +421,139 @@ function App() {
     })
   }, [loadout.augment, extraSlotConfig, allItemData])
 
-  // Prevent scrolling during drag operations
+  // Prevent scrolling during drag operations - but allow scrolling on target panel
+  // Auto-scroll content-grid when dragging from inventory and pointer is near edges
   useEffect(() => {
-    let savedScrollPositions: { element: Element; top: number; left: number }[] = []
+    if (!draggedItem || dragSource?.section !== 'inventory') return
 
-    if (draggedItem) {
-      // Save current scroll positions
-      const scrollableElements = document.querySelectorAll('.inventory-list, .content-grid')
-      savedScrollPositions = Array.from(scrollableElements).map(el => ({
-        element: el,
-        top: el.scrollTop,
-        left: el.scrollLeft
-      }))
+    const contentGrid = document.querySelector('.content-grid') as HTMLElement
+    if (!contentGrid) return
 
-      // Lock scroll positions
-      const lockScroll = () => {
-        savedScrollPositions.forEach(({ element, top, left }) => {
-          element.scrollTop = top
-          element.scrollLeft = left
-        })
+    let autoScrollInterval: NodeJS.Timeout | null = null
+    let lastPointerY = 0
+
+    // Track pointer position
+    const handlePointerMove = (e: PointerEvent | TouchEvent) => {
+      let clientY = 0
+      if (e instanceof PointerEvent) {
+        clientY = e.clientY
+      } else if (e instanceof TouchEvent && e.touches.length > 0) {
+        clientY = e.touches[0].clientY
       }
+      lastPointerY = clientY
+    }
 
-      // Monitor and reset scroll position if it changes
-      const scrollHandler = lockScroll
-      savedScrollPositions.forEach(({ element }) => {
-        element.addEventListener('scroll', scrollHandler)
-      })
+    // Auto-scroll based on pointer position in content-grid
+    const autoScroll = () => {
+      const rect = contentGrid.getBoundingClientRect()
+      const contentGridHeight = rect.height
+      const scrollThreshold = contentGridHeight * 0.25 // 25% from top/bottom
+      
+      // Position relative to content-grid
+      const pointerYRelative = lastPointerY - rect.top
 
-      return () => {
-        savedScrollPositions.forEach(({ element }) => {
-          element.removeEventListener('scroll', scrollHandler)
-        })
+      // Scroll speed based on how close to edge (0-50px in from edge = max speed)
+      const scrollSpeed = 5
+
+      if (pointerYRelative < scrollThreshold) {
+        // Near top - scroll up
+        contentGrid.scrollTop -= scrollSpeed
+      } else if (pointerYRelative > contentGridHeight - scrollThreshold) {
+        // Near bottom - scroll down
+        contentGrid.scrollTop += scrollSpeed
       }
     }
-  }, [draggedItem])
+
+    // Add listeners
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('touchmove', handlePointerMove)
+
+    // Lock inventory scroll during drag
+    const inventoryList = document.querySelector('.inventory-list') as HTMLElement
+    if (inventoryList) {
+      const initialInventoryScroll = inventoryList.scrollTop
+      
+      const lockInventoryScroll = () => {
+        if (inventoryList.scrollTop !== initialInventoryScroll) {
+          inventoryList.scrollTop = initialInventoryScroll
+        }
+      }
+
+      inventoryList.addEventListener('scroll', lockInventoryScroll, { passive: false })
+
+      // Start auto-scroll timer
+      autoScrollInterval = setInterval(autoScroll, 16) // ~60fps
+
+      return () => {
+        inventoryList.removeEventListener('scroll', lockInventoryScroll)
+        document.removeEventListener('pointermove', handlePointerMove)
+        document.removeEventListener('touchmove', handlePointerMove)
+        if (autoScrollInterval) clearInterval(autoScrollInterval)
+      }
+    }
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('touchmove', handlePointerMove)
+      if (autoScrollInterval) clearInterval(autoScrollInterval)
+    }
+  }, [draggedItem, dragSource])
+
+  // Auto-scroll loadout panel when dragging from it based on pointer position in top/bottom 25%
+  useEffect(() => {
+    if (!draggedItem || dragSource?.section === 'inventory') return
+
+    const contentGrid = document.querySelector('.content-grid') as HTMLElement
+    if (!contentGrid) return
+
+    let autoScrollInterval: NodeJS.Timeout | null = null
+    let lastPointerY = 0
+
+    // Track pointer position
+    const handlePointerMove = (e: PointerEvent | TouchEvent) => {
+      let clientY = 0
+      if (e instanceof PointerEvent) {
+        clientY = e.clientY
+      } else if (e instanceof TouchEvent && e.touches.length > 0) {
+        clientY = e.touches[0].clientY
+      }
+      lastPointerY = clientY
+    }
+
+    // Auto-scroll based on pointer position in content-grid
+    const autoScroll = () => {
+      const rect = contentGrid.getBoundingClientRect()
+      const gridHeight = rect.height
+      const scrollThreshold = gridHeight * 0.25 // 25% from top/bottom
+      
+      // Position relative to content-grid
+      const pointerYRelative = lastPointerY - rect.top
+
+      // Scroll speed
+      const scrollSpeed = 5
+
+      if (pointerYRelative < scrollThreshold) {
+        // Near top - scroll up
+        contentGrid.scrollTop -= scrollSpeed
+      } else if (pointerYRelative > gridHeight - scrollThreshold) {
+        // Near bottom - scroll down
+        contentGrid.scrollTop += scrollSpeed
+      }
+    }
+
+    // Add listeners
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('touchmove', handlePointerMove)
+
+    // Start auto-scroll timer
+    autoScrollInterval = setInterval(autoScroll, 16) // ~60fps
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('touchmove', handlePointerMove)
+      if (autoScrollInterval) clearInterval(autoScrollInterval)
+    }
+  }, [draggedItem, dragSource])
 
   // --- Persistence & Sharing Logic ---
 

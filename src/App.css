@@ -1218,19 +1218,25 @@
   .inventory-list.dragging {
     touch-action: none;
     overscroll-behavior: contain;
-    pointer-events: none;
+    -webkit-touch-callout: none;
+    /* Prevent momentum scrolling on iOS */
+    -webkit-overflow-scrolling: auto;
   }
 
   .content-grid.dragging {
     touch-action: none;
     overscroll-behavior: contain;
-    pointer-events: auto;
+    -webkit-touch-callout: none;
+    /* Prevent momentum scrolling on iOS */
+    -webkit-overflow-scrolling: auto;
   }
 
   .column-middle.dragging,
   .column-right.dragging {
     touch-action: none;
     overscroll-behavior: contain;
+    -webkit-touch-callout: none;
+    -webkit-overflow-scrolling: auto;
   }
 
   .content-grid {
