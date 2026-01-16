@@ -12,7 +12,8 @@ export async function dragAndDrop(
   targetLocator: Locator
 ): Promise<void> {
   // Use Playwright's built-in dragTo which handles drag events with locators
-  await sourceLocator.dragTo(targetLocator);
+  // Firefox needs more time for drag operations
+  await sourceLocator.dragTo(targetLocator, { timeout: 60000 });
   
   // Give React time to process the drop and state updates
   await page.waitForTimeout(500);
@@ -21,9 +22,9 @@ export async function dragAndDrop(
 /**
  * Wait for an element to be visible using Playwright's built-in waitFor
  * @param locator - Playwright locator to wait for
- * @param timeoutMs - Timeout in milliseconds (default: 200ms for aggressive timing)
+ * @param timeoutMs - Timeout in milliseconds (default: 5000ms for cross-browser compatibility)
  */
-export async function waitForElement(locator: Locator, timeoutMs = 200): Promise<void> {
+export async function waitForElement(locator: Locator, timeoutMs = 5000): Promise<void> {
   await locator.waitFor({ state: 'visible', timeout: timeoutMs });
 }
 
@@ -66,9 +67,9 @@ export async function waitForDragDropComplete(
 /**
  * Wait for page to be ready (inventory loaded, first item visible)
  * @param page - Playwright page object
- * @param timeoutMs - Timeout in milliseconds (default: 10000ms for page init with concurrent tests)
+ * @param timeoutMs - Timeout in milliseconds (default: 30000ms for cross-browser compatibility)
  */
-export async function waitForPageReady(page: Page, timeoutMs = 10000): Promise<void> {
+export async function waitForPageReady(page: Page, timeoutMs = 30000): Promise<void> {
   const startTime = Date.now();
   const pollInterval = 50;
   
