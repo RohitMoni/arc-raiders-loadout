@@ -429,7 +429,7 @@ function App() {
     const contentGrid = document.querySelector('.content-grid') as HTMLElement
     if (!contentGrid) return
 
-    let autoScrollInterval: NodeJS.Timeout | null = null
+    let autoScrollInterval: ReturnType<typeof setInterval> | null = null
     let lastPointerY = 0
 
     // Track pointer position
@@ -506,7 +506,7 @@ function App() {
     const contentGrid = document.querySelector('.content-grid') as HTMLElement
     if (!contentGrid) return
 
-    let autoScrollInterval: NodeJS.Timeout | null = null
+    let autoScrollInterval: ReturnType<typeof setInterval> | null = null
     let lastPointerY = 0
 
     // Track pointer position
