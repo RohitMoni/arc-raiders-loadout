@@ -419,6 +419,41 @@ function App() {
     })
   }, [loadout.augment, extraSlotConfig, allItemData])
 
+  // Prevent scrolling during drag operations
+  useEffect(() => {
+    let savedScrollPositions: { element: Element; top: number; left: number }[] = []
+
+    if (draggedItem) {
+      // Save current scroll positions
+      const scrollableElements = document.querySelectorAll('.inventory-list, .content-grid')
+      savedScrollPositions = Array.from(scrollableElements).map(el => ({
+        element: el,
+        top: el.scrollTop,
+        left: el.scrollLeft
+      }))
+
+      // Lock scroll positions
+      const lockScroll = () => {
+        savedScrollPositions.forEach(({ element, top, left }) => {
+          element.scrollTop = top
+          element.scrollLeft = left
+        })
+      }
+
+      // Monitor and reset scroll position if it changes
+      const scrollHandler = lockScroll
+      savedScrollPositions.forEach(({ element }) => {
+        element.addEventListener('scroll', scrollHandler)
+      })
+
+      return () => {
+        savedScrollPositions.forEach(({ element }) => {
+          element.removeEventListener('scroll', scrollHandler)
+        })
+      }
+    }
+  }, [draggedItem])
+
   // --- Persistence & Sharing Logic ---
 
   const serializeLoadout = (current: LoadoutState): SerializedLoadout => {
@@ -1339,7 +1374,20 @@ function App() {
             draggable={!isFixedSlot}
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
-            onTouchStart={(e) => handleTouchStart(e, displayItem, section, index)}
+            onTouchStart={(e) => {
+              // Check if touch started from middle 50% on mobile
+              const touch = e.touches[0]
+              const rect = e.currentTarget.getBoundingClientRect()
+              const x = touch.clientX - rect.left
+              if (window.innerWidth <= 768) {
+                // Only allow drag from middle 50% (25% to 75%)
+                if (x < rect.width * 0.25 || x > rect.width * 0.75) {
+                  // Don't start drag from outer areas - let it scroll
+                  return
+                }
+              }
+              handleTouchStart(e, displayItem, section, index)
+            }}
             onTouchMove={handleTouchMove}
             onTouchEnd={(e) => handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)}
             onMouseEnter={(e) => {
@@ -1550,6 +1598,7 @@ function App() {
           search={search}
           onSearchChange={setSearch}
           onFilterChange={setActiveFilter}
+          isDragging={!!draggedItem}
         />
         <LoadoutPanel
           loadout={loadout}
@@ -1559,9 +1608,10 @@ function App() {
           onShowLootTable={() => setShowLootTable(true)}
           onShare={handleShare}
           onReset={handleReset}
+          isDragging={!!draggedItem}
         >
           <EquipmentSection renderSlot={renderSlot} />
-          <div className="column-middle">
+          <div className={`column-middle ${!!draggedItem ? 'dragging' : ''}`}>
             {loadout.backpack.length > 0 && (
               <>
                 <h3 className="section-title">BACKPACK</h3>
@@ -1573,7 +1623,7 @@ function App() {
               </>
             )}
           </div>
-          <div className="column-right">
+          <div className={`column-right ${!!draggedItem ? 'dragging' : ''}`}>
             <div className="sub-section">
               <h3 className="section-title">QUICK USE</h3>
               <div className="quick-use-grid">
@@ -1582,10 +1632,10 @@ function App() {
                 ))}
               </div>
 
-              <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+              <h3 className="section-title" style={{ display: extraSlotConfig.count > 0 ? 'block' : 'none' }}>
                 {extraSlotConfig.types.join(' / ') || 'EXTRA'}
               </h3>
-              <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+              <div className="extra-grid" style={{ display: extraSlotConfig.count > 0 ? 'grid' : 'none' }}>
                 {loadout.extra.map((_, i) => (
                   <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
                 ))}
@@ -1594,8 +1644,8 @@ function App() {
                 ))}
               </div>
 
-              <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
-              <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
+              <h3 className="section-title" style={{ display: loadout.safePocket.length > 0 ? 'block' : 'none' }}>SAFE POCKET</h3>
+              <div className="safe-pocket-grid" style={{ display: loadout.safePocket.length > 0 ? 'grid' : 'none' }}>
                 {loadout.safePocket.map((_, i) => (
                   <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
                 ))}

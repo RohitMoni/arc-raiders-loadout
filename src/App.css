@@ -93,6 +93,16 @@
   box-sizing: border-box;
 }
 
+.equipment-mobile-layout {
+  display: contents; /* Allow children to participate in parent grid */
+}
+
+.weapons-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .section-title {
   font-size: 16px;
   font-weight: 600;
@@ -905,6 +915,14 @@
     border-radius: 6px;
 }
 
+.loadout-actions-desktop {
+  /* Show on desktop, hide on mobile */
+}
+
+.loadout-actions-mobile {
+  display: none; /* Hidden on desktop, shown on mobile */
+}
+
 .loadout-actions-row {
   padding: 16px 32px 0 32px;
   display: flex;
@@ -940,8 +958,7 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-s.coffee-btn {
-  margin-left: auto;
+.coffee-btn {
   color: #FFDD00;
   border-color: rgba(255, 221, 0, 0.2);
   display: flex;
@@ -1033,4 +1050,414 @@ s.coffee-btn {
   font-weight: 700;
   cursor: pointer;
   text-transform: uppercase;
+}
+
+/* Mobile responsive design */
+@media (max-width: 768px) and (orientation: portrait) {
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: contain;
+  }
+
+  .app-container {
+    flex-direction: column;
+    height: 100vh;
+    padding: 8px;
+    gap: 8px;
+    overscroll-behavior: none;
+  }
+
+  .inventory-panel {
+    flex: none;
+    height: 40%;
+    min-height: 300px;
+  }
+
+  .loadout-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .inventory-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .inventory-sidebar {
+    display: none;
+  }
+
+  .inventory-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .inventory-search-bar {
+    margin-bottom: 12px;
+    font-size: 16px;
+    padding: 12px;
+    /* Prevent zoom on iOS */
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+
+  .inventory-list {
+    flex: 1;
+    overflow-y: auto;
+    gap: 8px;
+    /* Improve scrolling on mobile */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .inventory-item-row {
+    padding: 8px;
+    border-radius: 8px;
+    /* Better touch target with more spacing */
+    min-height: 56px;
+    margin: 0 12px 2px 12px;
+    /* Prevent accidental drag when scrolling */
+    touch-action: pan-y;
+    display: flex;
+    align-items: center;
+  }
+
+  .item-drag-zone {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 50%;
+  }
+
+  .item-scroll-zone {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 50%;
+    /* Make right side better for scrolling */
+    touch-action: pan-y;
+  }
+
+  .inventory-list {
+    flex: 1;
+    overflow-y: auto;
+    gap: 8px;
+    /* Smooth scrolling and better spacing */
+    -webkit-overflow-scrolling: touch;
+    padding: 0 2px;
+  }
+
+  .inventory-list.dragging {
+    touch-action: none;
+    overscroll-behavior: contain;
+    pointer-events: none;
+  }
+
+  .content-grid.dragging {
+    touch-action: none;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+  }
+
+  .column-middle.dragging,
+  .column-right.dragging {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    /* Smooth scrolling */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide desktop actions, show mobile actions */
+  .loadout-actions-desktop {
+    display: none;
+  }
+
+  .loadout-actions-mobile {
+    display: block;
+  }
+
+  .column-left {
+    order: 1;
+  }
+
+  .column-middle {
+    order: 3;
+  }
+
+  .column-right {
+    order: 4;
+  }
+
+  .equipment-mobile-layout {
+    display: block; /* Override 'contents' for mobile */
+  }
+
+  .weapons-section {
+    margin-top: 16px;
+  }
+
+  /* Mobile equipment layout */
+  .augment-shield-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .weapon-slot {
+    margin-bottom: 12px;
+  }
+
+  .weapons-section {
+    margin-top: 16px;
+    padding: 0 20px;
+  }
+
+  .backpack-grid {
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 8px;
+  }
+
+  .quick-use-grid {
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 8px;
+  }
+
+  .extra-grid {
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 8px;
+  }
+
+  .safe-pocket-grid {
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 8px;
+  }
+
+  .panel-title-row {
+    padding: 16px 16px 8px 16px;
+  }
+
+  .panel-title {
+    font-size: 18px;
+  }
+
+  .panel-title-input {
+    font-size: 18px;
+    /* Prevent zoom on iOS */
+    -webkit-appearance: none;
+  }
+
+  .section-title {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .grid-item {
+    min-height: 60px;
+    min-width: 60px;
+    /* Better touch targets */
+    touch-action: manipulation;
+  }
+
+  .augment-slot,
+  .shield-slot,
+  .weapon-slot {
+    min-height: 80px;
+    min-width: 80px;
+    touch-action: manipulation;
+    position: relative;
+  }
+
+  .augment-slot::before,
+  .shield-slot::before,
+  .weapon-slot::before {
+    content: '';
+    position: absolute;
+    left: 25%;
+    right: 25%;
+    top: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.01);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .loadout-actions-mobile {
+    order: 5;
+    margin-top: auto;
+    padding-top: 16px;
+    background: rgba(13, 16, 28, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .loadout-actions-mobile .loadout-actions-row {
+    padding: 12px 16px 8px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .loadout-actions-mobile .loadout-actions-row button {
+    flex: 1;
+    min-width: 100px;
+    font-size: 12px;
+    padding: 12px 16px;
+    /* Better touch targets */
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .loadout-actions-mobile .loadout-links-row {
+    padding: 8px 16px 16px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .loadout-links-row .small-btn {
+    flex: 1;
+    min-width: 90px;
+    text-align: center;
+    padding: 8px 12px;
+    font-size: 10px;
+    /* Better touch targets */
+    min-height: 36px;
+    touch-action: manipulation;
+  }
+
+  .coffee-btn {
+    margin-left: 0;
+  }
+
+  /* Mobile item slots styling */
+  .slot-item {
+    /* Prevent text selection on mobile */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    /* Better touch response */
+    touch-action: manipulation;
+  }
+
+  /* Mobile tooltip positioning */
+  .item-tooltip {
+    font-size: 12px;
+    padding: 6px 8px;
+    /* Ensure tooltip doesn't get cut off */
+    max-width: 200px;
+    word-wrap: break-word;
+  }
+
+  /* Improve mobile drag feedback */
+  .dragged-item-ghost {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+
+  /* Mobile-specific loot modal adjustments */
+  .loot-modal {
+    margin: 20px;
+    max-height: 80vh;
+  }
+
+  .loot-list {
+    max-height: 60vh;
+  }
+
+  .loot-item {
+    padding: 12px;
+  }
+
+  /* Improve mobile filter button visibility (if shown) */
+  .filter-btn {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+}
+
+/* Mobile landscape and small tablets */
+@media (max-width: 768px) and (orientation: landscape) {
+  .app-container {
+    flex-direction: row;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .inventory-panel {
+    flex: none;
+    width: 35%;
+    min-width: 280px;
+  }
+
+  .loadout-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .inventory-sidebar {
+    display: none;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  .column-left {
+    order: 1;
+  }
+
+  .column-middle {
+    order: 2;
+  }
+
+  .column-right {
+    order: 3;
+    grid-column: 1 / -1;
+  }
+
+  .loadout-actions {
+    order: 4;
+    grid-column: 1 / -1;
+  }
+}
+
+/* Large tablets */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .content-grid {
+    gap: 32px;
+    padding: 24px;
+  }
+
+  .panel-title {
+    font-size: 20px;
+  }
+
+  .section-title {
+    font-size: 15px;
+  }
 }
