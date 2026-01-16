@@ -501,7 +501,7 @@ function App() {
 
   // Auto-scroll loadout panel when dragging from it based on pointer position in top/bottom 25%
   useEffect(() => {
-    if (!draggedItem || dragSource?.section === 'inventory') return
+    if (!draggedItem || dragSource?.section === 'inventory' || activeSlot) return
 
     const contentGrid = document.querySelector('.content-grid') as HTMLElement
     if (!contentGrid) return
@@ -553,7 +553,35 @@ function App() {
       document.removeEventListener('touchmove', handlePointerMove)
       if (autoScrollInterval) clearInterval(autoScrollInterval)
     }
-  }, [draggedItem, dragSource])
+  }, [draggedItem, dragSource, activeSlot])
+
+  // Lock scroll position when an item is selected
+  useEffect(() => {
+    if (!activeSlot) return
+
+    const inventoryList = document.querySelector('.inventory-list') as HTMLElement
+    const contentGrid = document.querySelector('.content-grid') as HTMLElement
+
+    const initialInventoryScroll = inventoryList?.scrollTop ?? 0
+    const initialContentScroll = contentGrid?.scrollTop ?? 0
+
+    let lockInterval: ReturnType<typeof setInterval> | null = null
+
+    const lockScroll = () => {
+      if (inventoryList && inventoryList.scrollTop !== initialInventoryScroll) {
+        inventoryList.scrollTop = initialInventoryScroll
+      }
+      if (contentGrid && contentGrid.scrollTop !== initialContentScroll) {
+        contentGrid.scrollTop = initialContentScroll
+      }
+    }
+
+    lockInterval = setInterval(lockScroll, 16)
+
+    return () => {
+      if (lockInterval) clearInterval(lockInterval)
+    }
+  }, [activeSlot])
 
   // --- Persistence & Sharing Logic ---
 
