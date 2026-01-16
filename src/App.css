@@ -400,6 +400,64 @@
   padding-left: 8px;
 }
 
+/* Touch-specific optimizations for all touch devices */
+@media (pointer: coarse) {
+  /* Ensure minimum touch target sizes */
+  button, .clickable, .tier-btn, .slot-item, .inventory-item-row {
+    min-height: 44px; /* Apple's recommended minimum */
+    touch-action: manipulation; /* Disable double-tap zoom */
+  }
+
+  .grid-item {
+    min-height: 56px;
+    min-width: 56px;
+  }
+
+  /* Increase spacing for easier touch interaction */
+  .content-grid {
+    gap: 12px;
+  }
+
+  .inventory-list {
+    gap: 8px;
+  }
+}
+
+/* Mouse/trackpad hover effects - only show on devices that can hover */
+@media (hover: hover) {
+  .tier-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .slot-item:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .inventory-item-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(2px);
+  }
+
+  .loot-btn:hover, .clear-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .small-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .coffee-btn:hover {
+    background: rgba(255, 221, 0, 0.1);
+    color: #FFDD00;
+    border-color: #FFDD00;
+  }
+}
+
 /* Styles for the dragged item ghost */
 .dragged-item-ghost .slot-item-name {
   opacity: 1;
@@ -916,7 +974,8 @@
 }
 
 .loadout-actions-desktop {
-  /* Show on desktop, hide on mobile */
+  display: flex;
+  flex-direction: column;
 }
 
 .loadout-actions-mobile {
@@ -1055,15 +1114,16 @@
   text-transform: uppercase;
 }
 
-/* Mobile responsive design */
-@media (max-width: 768px) and (orientation: portrait) {
+/* Touch-primary devices in portrait (phones, small tablets) - ALWAYS use mobile layout */
+/* This rule has highest specificity to override any other layout rules */
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
   html, body {
     overscroll-behavior: none;
     overscroll-behavior-y: contain;
   }
 
   .app-container {
-    flex-direction: column;
+    flex-direction: column !important; /* Force mobile layout in portrait */
     height: 100vh;
     padding: 8px;
     gap: 8px;
@@ -1106,6 +1166,7 @@
     padding: 12px;
     /* Prevent zoom on iOS */
     -webkit-appearance: none;
+    appearance: none;
     border-radius: 0;
   }
 
@@ -1193,14 +1254,17 @@
 
   .column-left {
     order: 1;
+    grid-column: 1 / -1; /* Span full width */
   }
 
   .column-middle {
-    order: 3;
+    order: 2;
+    grid-column: 1 / -1; /* Span full width */
   }
 
   .column-right {
-    order: 4;
+    order: 3;
+    grid-column: 1 / -1; /* Span full width */
   }
 
   .equipment-mobile-layout {
@@ -1260,6 +1324,7 @@
     font-size: 18px;
     /* Prevent zoom on iOS */
     -webkit-appearance: none;
+    appearance: none;
   }
 
   .section-title {
@@ -1394,8 +1459,8 @@
   }
 }
 
-/* Mobile landscape and small tablets */
-@media (max-width: 768px) and (orientation: landscape) {
+/* Touch-primary devices in landscape (phones horizontal, small tablets) */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 1023px) {
   .app-container {
     flex-direction: row;
     padding: 8px;
@@ -1414,6 +1479,76 @@
     flex-direction: column;
   }
 
+  .content-grid {
+    gap: 8px;
+  }
+
+  .equipment-mobile-layout {
+    display: grid;
+  }
+
+  .loadout-actions-desktop {
+    display: none;
+  }
+
+  .loadout-actions-mobile {
+    display: flex;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .inventory-sidebar {
+    display: none;
+  }
+}
+
+/* Large tablets with touch (iPad Pro, Surface Pro) - ONLY in landscape mode */
+@media (min-width: 1024px) and (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .app-container {
+    flex-direction: row; /* Desktop layout */
+    padding: 16px;
+    gap: 16px;
+  }
+
+  /* Touch-optimized sizes for large tablets */
+  .grid-item {
+    min-height: 52px;
+    min-width: 52px;
+  }
+
+  .inventory-item-row {
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+
+  .slot-item {
+    min-height: 52px;
+  }
+
+  /* Larger touch targets for buttons */
+  .loot-btn, .clear-btn {
+    min-height: 44px;
+    padding: 8px 16px;
+  }
+
+  .small-btn {
+    min-height: 44px;
+    padding: 8px 16px;
+  }
+
+  /* Keep desktop actions visible on large tablets */
+  .loadout-actions-desktop {
+    display: flex;
+  }
+
+  .loadout-actions-mobile {
+    display: none;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
   .inventory-sidebar {
     display: none;
   }

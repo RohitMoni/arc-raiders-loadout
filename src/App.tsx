@@ -4,6 +4,7 @@ import { InventoryPanel } from './components/InventoryPanel'
 import { LoadoutPanel } from './components/LoadoutPanel'
 import { EquipmentSection } from './components/EquipmentSection'
 import { useDragAndDrop } from './hooks/useDragAndDrop'
+import { useDeviceDetection } from './hooks/useDeviceDetection'
 import './App.css'
 
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -120,6 +121,7 @@ const calculateExtraSlotsCount = (augment: Item | null) => {
 }
 
 function App() {
+  const { isTablet, isTouchDevice } = useDeviceDetection()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
@@ -1375,12 +1377,12 @@ function App() {
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
             onTouchStart={(e) => {
-              // Check if touch started from middle 50% on mobile
+              // Check if touch started from middle 50% on touch devices
               const touch = e.touches[0]
               const rect = e.currentTarget.getBoundingClientRect()
               const x = touch.clientX - rect.left
-              if (window.innerWidth <= 768) {
-                // Only allow drag from middle 50% (25% to 75%)
+              if (isTouchDevice && !isTablet) {
+                // Only allow drag from middle 50% (25% to 75%) on phones
                 if (x < rect.width * 0.25 || x > rect.width * 0.75) {
                   // Don't start drag from outer areas - let it scroll
                   return

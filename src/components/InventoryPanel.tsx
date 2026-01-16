@@ -1,4 +1,5 @@
 import { DragEvent, TouchEvent } from 'react'
+import { useDeviceDetection } from '../hooks/useDeviceDetection'
 
 interface Item {
   id: string
@@ -58,6 +59,8 @@ export function InventoryPanel({
   onFilterChange,
   isDragging = false,
 }: InventoryPanelProps) {
+  const { isTablet, isTouchDevice } = useDeviceDetection()
+  
   return (
     <div className="box inventory-panel">
       <div className="panel-title-row">
@@ -105,10 +108,10 @@ export function InventoryPanel({
                   className={`inventory-item-row ${getRarityClass(activeItem.rarity)}`}
                   draggable
                   onDragStart={(e) => {
-                    // Check if drag started from left half on desktop
+                    // Check if drag started from left half on touch devices
                     const rect = e.currentTarget.getBoundingClientRect()
                     const x = e.clientX - rect.left
-                    if (window.innerWidth <= 768 && x > rect.width * 0.5) {
+                    if (isTouchDevice && !isTablet && x > rect.width * 0.5) {
                       e.preventDefault()
                       return
                     }
