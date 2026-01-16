@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, DragEvent, MouseEvent, useRef, ChangeEvent } from 'react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
+import { InventoryPanel } from './components/InventoryPanel'
+import { LoadoutPanel } from './components/LoadoutPanel'
+import { EquipmentSection } from './components/EquipmentSection'
 import './App.css'
 
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -1456,213 +1459,75 @@ function App() {
         onDragOverCapture={handleGlobalDragOverCapture}
         onDrop={handleAppDrop}
       >
-        <div className="box inventory-panel">
-          <div className="panel-title-row">
-            <h1 className="panel-title">INVENTORY</h1>
+        <InventoryPanel
+          filteredItems={filteredItems}
+          selectedVariantMap={selectedVariantMap}
+          onVariantSelect={(itemId, variantId) =>
+            setSelectedVariantMap((prev) => ({ ...prev, [itemId]: variantId }))
+          }
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          getRarityClass={getRarityClass}
+          activeFilter={activeFilter}
+          search={search}
+          onSearchChange={setSearch}
+          onFilterChange={setActiveFilter}
+        />
+        <LoadoutPanel
+          loadout={loadout}
+          onTitleChange={(title) => setLoadout((prev) => ({ ...prev, title }))}
+          onLoadoutPanelDragOver={handleLoadoutPanelDragOver}
+          onLoadoutPanelDrop={handleLoadoutPanelDrop}
+          onShowLootTable={() => setShowLootTable(true)}
+          onShare={handleShare}
+          onReset={handleReset}
+        >
+          <EquipmentSection renderSlot={renderSlot} />
+          <div className="column-middle">
+            {loadout.backpack.length > 0 && (
+              <>
+                <h3 className="section-title">BACKPACK</h3>
+                <div className="backpack-grid">
+                  {loadout.backpack.map((_, i) => (
+                    <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-          <div className="inventory-content">
-            <div className="inventory-sidebar">
-              <button
-                className={`filter-btn ${activeFilter === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('all')}
-                title="All"
-              >
-                ♾️
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Weapon' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Weapon')}
-                title="Weapons"
-              >
-                🔫
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Quick Use' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Quick Use')}
-                title="Quick Use"
-              >
-                ❤️
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Ammunition' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Ammunition')}
-                title="Ammunition"
-              >
-                📦
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Modification' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Modification')}
-                title="Mods"
-              >
-                🔧
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Shield' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Shield')}
-                title="Shields"
-              >
-                🛡️
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Augment' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Augment')}
-                title="Augments"
-              >
-                ✨
-              </button>
-              <button
-                className={`filter-btn ${activeFilter === 'Key' ? 'active' : ''}`}
-                onClick={() => setActiveFilter('Key')}
-                title="Keys"
-              >
-                🔑
-              </button>
-            </div>
-            <div className="inventory-main">
-              <input
-                type="text"
-                className="inventory-search-bar"
-                placeholder="Search items..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  if (e.target.value) setActiveFilter('all')
-                }}
-              />
-              <div className="inventory-list">
-                {filteredItems.map((item) => {
-                  const selectedId = selectedVariantMap[item.id]
-                  const activeItem =
-                    selectedId && item.variants
-                      ? item.variants.find((v) => v.id === selectedId) || item
-                      : item
+          <div className="column-right">
+            <div className="sub-section">
+              <h3 className="section-title">QUICK USE</h3>
+              <div className="quick-use-grid">
+                {loadout.quickUse.map((_, i) => (
+                  <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
+                ))}
+              </div>
 
-                  return (
-                    <div
-                      key={item.id}
-                      className={`inventory-item-row ${getRarityClass(activeItem.rarity)}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, activeItem, 'inventory')}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <div className="item-icon-placeholder">
-                        {activeItem.isImage ? (
-                          <img src={activeItem.icon} alt={activeItem.name} className="item-icon-image" />
-                        ) : (
-                          activeItem.icon
-                        )}
-                      </div>
-                      <div className="item-info">
-                        <span className="item-name">{activeItem.name}</span>
-                      </div>
-                      {item.variants && item.variants.length > 1 && (
-                        <div className="tier-selector">
-                          {item.variants.map((v, idx) => (
-                            <button
-                              key={v.id}
-                              className={`tier-btn ${activeItem.id === v.id ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                console.log('[Inventory] Selected Variant:', v.id, 'for item:', item.id)
-                                setSelectedVariantMap((prev) => ({ ...prev, [item.id]: v.id }))
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                            >
-                              {['I', 'II', 'III', 'IV', 'V'][idx] || idx + 1}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+              <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+                {extraSlotConfig.types.join(' / ') || 'EXTRA'}
+              </h3>
+              <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+                {loadout.extra.map((_, i) => (
+                  <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
+                ))}
+                {Array.from({ length: Math.max(0, 3 - loadout.extra.length) }).map((_, i) => (
+                  <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                ))}
+              </div>
+
+              <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
+              <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
+                {loadout.safePocket.map((_, i) => (
+                  <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
+                ))}
+                {Array.from({ length: Math.max(0, 3 - loadout.safePocket.length) }).map((_, i) => (
+                  <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-        <div className="box loadout-panel" onDragOver={handleLoadoutPanelDragOver} onDrop={handleLoadoutPanelDrop}>
-          <div className="panel-title-row">
-            <div style={{ flex: 1 }}>
-              <input
-                className="panel-title-input"
-                value={loadout.title}
-                onChange={(e) => setLoadout(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="NAME YOUR LOADOUT"
-              />
-            </div>
-          </div>
-          <div className="loadout-actions-row">
-            <button className="loot-btn" onClick={() => setShowLootTable(true)}>LOOT LIST</button>
-            <button className="loot-btn" onClick={handleShare} title="Copy Loadout URL">
-              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor" style={{ marginRight: '8px' }}><path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
-              SHARE LOADOUT
-            </button>
-            <button className="loot-btn" onClick={handleReset} title="Reset Loadout">RESET</button>
-          </div>
-          <div className="loadout-links-row">
-            <a href="https://github.com/RohitMoni/arc-raiders-loadout/issues" target="_blank" rel="noreferrer" className="small-btn">Report Issue</a>
-            <a href="https://github.com/RohitMoni/arc-raiders-loadout/issues" target="_blank" rel="noreferrer" className="small-btn">Suggest Feature</a>
-            <a href="https://buymeacoffee.com/jaklite" target="_blank" rel="noreferrer" className="small-btn coffee-btn">
-              <span>☕</span> Buy me a coffee
-            </a>
-          </div>
-          <div className="content-grid">
-            <div className="column-left">
-              <h3 className="section-title">EQUIPMENT</h3>
-              <div className="augment-shield-row">
-                {renderSlot('augment', -1, 'augment-slot')}
-                {renderSlot('shield', -1, 'shield-slot')}
-              </div>
-              {renderSlot('weapons', 0, 'weapon-slot')}
-              {renderSlot('weapons', 1, 'weapon-slot')}
-            </div>
-            <div className="column-middle">
-              {loadout.backpack.length > 0 && (
-                <>
-                  <h3 className="section-title">BACKPACK</h3>
-                  <div className="backpack-grid">
-                    {loadout.backpack.map((_, i) => (
-                      <div key={i}>{renderSlot('backpack', i, 'grid-item')}</div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="column-right">
-              <div className="sub-section">
-                <h3 className="section-title">QUICK USE</h3>
-                <div className="quick-use-grid">
-                  {loadout.quickUse.map((_, i) => (
-                    <div key={i}>{renderSlot('quickUse', i, 'grid-item')}</div>
-                  ))}
-                </div>
-
-                <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
-                  {extraSlotConfig.types.join(' / ') || 'EXTRA'}
-                </h3>
-                <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
-                  {loadout.extra.map((_, i) => (
-                    <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
-                  ))}
-                  {Array.from({ length: Math.max(0, 3 - loadout.extra.length) }).map((_, i) => (
-                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
-                  ))}
-                </div>
-
-                <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
-                <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
-                  {loadout.safePocket.map((_, i) => (
-                    <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
-                  ))}
-                  {Array.from({ length: Math.max(0, 3 - loadout.safePocket.length) }).map((_, i) => (
-                    <div key={`spacer-${i}`} className="grid-item spacer-slot"></div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        </LoadoutPanel>
       </div>
 
       {draggedItem && (
