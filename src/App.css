@@ -949,7 +949,9 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   transition: all 0.2s;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .small-btn:hover {
@@ -963,6 +965,7 @@
   border-color: rgba(255, 221, 0, 0.2);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 
@@ -1171,7 +1174,7 @@
 
   .content-grid {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 12px;
     padding: 16px;
     flex: 1;
     overflow-y: auto;
