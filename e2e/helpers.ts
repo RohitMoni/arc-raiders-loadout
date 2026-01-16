@@ -98,3 +98,51 @@ export async function waitForPageReady(page: Page, timeoutMs = 10000): Promise<v
   
   throw new Error(`Page not ready after ${timeoutMs}ms`);
 }
+
+/**
+ * Simulate a touch drag-and-drop operation using Playwright's touch API
+ * @param page - Playwright page object
+ * @param sourceLocator - Locator of the element to drag from
+ * @param targetLocator - Locator of the element to drop onto
+ */
+export async function touchDragAndDrop(
+  page: Page,
+  sourceLocator: Locator,
+  targetLocator: Locator
+): Promise<void> {
+  // Get bounding boxes for source and target
+  const sourceBox = await sourceLocator.boundingBox();
+  const targetBox = await targetLocator.boundingBox();
+  
+  if (!sourceBox || !targetBox) {
+    throw new Error('Could not get bounding boxes for touch drag-drop');
+  }
+
+  // Calculate center points
+  const sourceX = sourceBox.x + sourceBox.width / 2;
+  const sourceY = sourceBox.y + sourceBox.height / 2;
+  const targetX = targetBox.x + targetBox.width / 2;
+  const targetY = targetBox.y + targetBox.height / 2;
+
+  // Simulate touch drag sequence - all events on the source element
+  // 1. touchstart - Start the drag at source
+  await sourceLocator.dispatchEvent('touchstart', {
+    touches: [{ clientX: sourceX, clientY: sourceY, identifier: 0 }],
+    changedTouches: [{ clientX: sourceX, clientY: sourceY, identifier: 0 }],
+  });
+
+  // 2. touchmove - Move to target (still on source element)
+  await sourceLocator.dispatchEvent('touchmove', {
+    touches: [{ clientX: targetX, clientY: targetY, identifier: 0 }],
+    changedTouches: [{ clientX: targetX, clientY: targetY, identifier: 0 }],
+  });
+
+  // 3. touchend - Release at target location (still on source element)
+  await sourceLocator.dispatchEvent('touchend', {
+    touches: [],
+    changedTouches: [{ clientX: targetX, clientY: targetY, identifier: 0 }],
+  });
+  
+  // Give React time to process the drop and state updates
+  await page.waitForTimeout(500);
+}

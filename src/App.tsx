@@ -160,6 +160,9 @@ function App() {
     handleLoadoutPanelDragOver,
     handleLoadoutPanelDrop: handleLoadoutPanelDropHandler,
     handleGlobalDragOverCapture,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
   } = useDragAndDrop({
     canEquip: (item, slotType, slotIndex, modIndex) => 
       canEquip(item, slotType, slotIndex, modIndex),
@@ -700,6 +703,213 @@ function App() {
     )
   }
 
+  const handleItemEquip = (
+    item: Item,
+    sourceSection: string,
+    sourceIndex: number | undefined,
+    sourceModIndex: number | undefined,
+    isSplit: boolean,
+    targetSection: keyof LoadoutState,
+    targetIndex: number = -1,
+    targetModIndex: number = -1
+  ) => {
+    console.log('[ItemEquip] Item:', item.name, 'From:', sourceSection, sourceIndex, 'To:', targetSection, targetIndex)
+
+    if (sourceSection === targetSection && sourceIndex === targetIndex && sourceModIndex === targetModIndex) return
+
+    if (targetSection === 'extra') {
+      const slotType = extraSlotConfig.slotTypes[targetIndex]
+      if (slotType === 'integrated_binoculars' || slotType === 'integrated_shield_recharger') {
+        return
+      }
+    }
+
+    if (!canEquip(item, targetSection, targetIndex, targetModIndex)) {
+      console.log('[ItemEquip] Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
+      return
+    }
+
+    setLoadout((prev) => {
+      const newLoadout = { ...prev }
+
+      const getItem = (sec: keyof LoadoutState, idx: number) => {
+        if (idx !== -1 && Array.isArray(newLoadout[sec])) return (newLoadout[sec] as (Item | null)[])[idx]
+        return newLoadout[sec] as Item | null
+      }
+
+      const setItem = (sec: keyof LoadoutState, idx: number, val: Item | null) => {
+        if (idx !== -1 && Array.isArray(newLoadout[sec])) {
+          if (newLoadout[sec] === prev[sec]) {
+            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+          }
+          ;(newLoadout[sec] as (Item | null)[])[idx] = val
+        } else {
+          ;(newLoadout[sec] as any) = val
+        }
+      }
+
+      // Logic for dropping into a mod slot
+      if (targetModIndex !== -1) {
+          const weapon = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
+          if (!weapon) return prev
+          
+          const newWeapon = { ...weapon, modifications: [...(weapon.modifications || [])] }
+          if (!newWeapon.modifications) newWeapon.modifications = []
+          
+          newWeapon.modifications[targetModIndex] = { ...item, count: 1 }
+          ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = newWeapon
+          
+          if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
+              if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+                  const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
+                  if (sourceWeapon && sourceWeapon.modifications) {
+                       if (sourceSection === targetSection && sourceIndex === targetIndex) {
+                           newWeapon.modifications[sourceModIndex] = null
+                       } else {
+                           const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                           newSourceWeapon.modifications[sourceModIndex] = null
+                           ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
+                       }
+                  }
+              } else {
+                  const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+                  const remaining = (sourceItem?.count || 1) - 1
+                  setItem(sourceSection as keyof LoadoutState, sourceIndex, remaining > 0 ? { ...sourceItem!, count: remaining } : null)
+              }
+          }
+          
+          return newLoadout
+      }
+
+      const targetItem = getItem(targetSection, targetIndex)
+      let amountToMove = item.count || 1
+      let newTargetItem = { ...item }
+
+      if (targetItem && targetItem.id === item.id && targetItem.stackSize) {
+        const space = targetItem.stackSize - (targetItem.count || 1)
+        amountToMove = Math.min(amountToMove, space)
+        newTargetItem = { ...targetItem, count: (targetItem.count || 1) + amountToMove }
+      } else {
+        if (targetItem && isSplit) return prev
+        newTargetItem = { ...item, count: amountToMove }
+      }
+
+      if (amountToMove === 0) return prev
+
+      setItem(targetSection, targetIndex, newTargetItem)
+
+      if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
+        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+            const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[sourceModIndex] = null
+                ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
+            }
+        } else {
+            const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
+            if (targetItem && targetItem.id !== item.id && !isSplit) {
+              setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
+            } else {
+              const currentSourceCount = sourceItem?.count || 1
+              const remaining = currentSourceCount - amountToMove
+              setItem(
+                sourceSection as keyof LoadoutState,
+                sourceIndex,
+                remaining > 0 ? { ...sourceItem!, count: remaining } : null
+              )
+            }
+        }
+      }
+
+      if (targetSection === 'augment' || sourceSection === 'augment') {
+        const currentAugment = newLoadout.augment
+        const currentShield = newLoadout.shield
+        if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+          console.log('[Loadout] Removing incompatible shield:', currentShield.name)
+          newLoadout.shield = null
+        }
+      }
+
+      return newLoadout
+    })
+    setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
+    setDragSource(null)
+    setHoveredItem(null)
+  }
+
+  const handleTouchSlotDrop = (section: keyof LoadoutState, index: number = -1, modIndex: number = -1) => {
+    console.log('[TouchSlotDrop] Target:', section, index, modIndex)
+    
+    if (!draggedItem || !dragSource) {
+      console.log('[TouchSlotDrop] No dragged item or source')
+      return
+    }
+
+    const item = draggedItem
+    const sourceSection = dragSource.section
+    const sourceIndex = dragSource.index
+    const sourceModIndex = dragSource.modIndex
+    const isSplit = dragSource.isSplit
+
+    handleItemEquip(item, sourceSection, sourceIndex, sourceModIndex, isSplit, section, index, modIndex)
+  }
+
+  const handleTouchInventoryDrop = () => {
+    console.log('[TouchInventoryDrop] Touch ended on inventory panel')
+    if (!draggedItem || !dragSource) return
+    
+    // Only unequip if dragging FROM equipment (not from inventory)
+    if (dragSource.section === 'inventory') {
+      console.log('[TouchInventoryDrop] Source is already inventory, ignoring')
+      return
+    }
+
+    const { section, index, modIndex } = dragSource
+
+    // Unequip the item
+    if (index !== undefined) {
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        const sec = section as keyof LoadoutState
+
+        if (modIndex !== undefined && modIndex !== -1) {
+            // Unequip mod
+            const sourceWeapon = (newLoadout[sec] as (Item | null)[])[index]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[modIndex] = null
+                ;(newLoadout[sec] as (Item | null)[])[index] = newSourceWeapon
+            }
+        } else {
+            // Unequip regular item
+            if (index !== -1 && Array.isArray(newLoadout[sec])) {
+              if (newLoadout[sec] === prev[sec]) {
+                ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+              }
+              ;(newLoadout[sec] as (Item | null)[])[index] = null
+            } else {
+              ;(newLoadout[sec] as any) = null
+            }
+        }
+
+        // Check Shield Compatibility if Augment removed
+        if (sec === 'augment') {
+           const currentAugment = newLoadout.augment
+           const currentShield = newLoadout.shield
+           if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+             console.log('[TouchInventoryDrop] Removing incompatible shield after augment unequip')
+             newLoadout.shield = null
+           }
+        }
+
+        return newLoadout
+      })
+    }
+  }
+
   const handleSlotDrop = (e: DragEvent, targetSection: keyof LoadoutState, targetIndex: number = -1, targetModIndex: number = -1) => {
     console.log('[SlotDrop] Target:', targetSection, targetIndex, targetModIndex)
     e.preventDefault()
@@ -735,148 +945,9 @@ function App() {
     }
 
     const { item, sourceSection, sourceIndex, sourceModIndex, isSplit } = dropData
-
     console.log('[SlotDrop] Dropped Item:', item.name, 'Category:', item.category.join(', '))
 
-    if (sourceSection === targetSection && sourceIndex === targetIndex && sourceModIndex === targetModIndex) return
-
-    if (targetSection === 'extra') {
-      const slotType = extraSlotConfig.slotTypes[targetIndex]
-      if (slotType === 'integrated_binoculars' || slotType === 'integrated_shield_recharger') {
-        return
-      }
-    }
-
-    if (!canEquip(item, targetSection, targetIndex, targetModIndex)) {
-      console.log('[SlotDrop] Equip Rejected: Invalid Category', item.category.join(', '), 'for slot', targetSection)
-      return
-    }
-
-    setLoadout((prev) => {
-      const newLoadout = { ...prev }
-
-      const getItem = (sec: keyof LoadoutState, idx: number) => {
-        if (idx !== -1 && Array.isArray(newLoadout[sec])) return (newLoadout[sec] as (Item | null)[])[idx]
-        return newLoadout[sec] as Item | null
-      }
-
-      const setItem = (sec: keyof LoadoutState, idx: number, val: Item | null) => {
-        if (idx !== -1 && Array.isArray(newLoadout[sec])) {
-          if (newLoadout[sec] === prev[sec]) {
-            ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
-          }
-          ;(newLoadout[sec] as (Item | null)[])[idx] = val
-        } else {
-          ;(newLoadout[sec] as any) = val
-        }
-      }
-
-      // Logic for dropping into a mod slot
-      if (targetModIndex !== -1) {
-          // We are dropping a mod into a weapon
-          const weapon = (newLoadout[targetSection] as (Item | null)[])[targetIndex]
-          if (!weapon) return prev // Should not happen
-          
-          // Create copy of weapon and mods
-          const newWeapon = { ...weapon, modifications: [...(weapon.modifications || [])] }
-          
-          // Ensure mods array is initialized (should be by default if supportedModifications exists)
-          if (!newWeapon.modifications) newWeapon.modifications = []
-          
-          // Place mod
-          newWeapon.modifications[targetModIndex] = { ...item, count: 1 }
-          
-          // Update weapon in loadout
-          ;(newLoadout[targetSection] as (Item | null)[])[targetIndex] = newWeapon
-          
-          // Handle source removal if needed
-          if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
-              if (sourceModIndex !== undefined && sourceModIndex !== -1) {
-                  // Moved from another mod slot
-                  const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
-                  if (sourceWeapon && sourceWeapon.modifications) {
-                       // If source and target are same weapon, we already cloned it.
-                       if (sourceSection === targetSection && sourceIndex === targetIndex) {
-                           newWeapon.modifications[sourceModIndex] = null
-                       } else {
-                           const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
-                           newSourceWeapon.modifications[sourceModIndex] = null
-                           ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
-                       }
-                  }
-              } else {
-                  // Moved from a regular slot (e.g. backpack)
-                  const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
-                  const remaining = (sourceItem?.count || 1) - 1 // Mods are count 1
-                  setItem(sourceSection as keyof LoadoutState, sourceIndex, remaining > 0 ? { ...sourceItem!, count: remaining } : null)
-              }
-          }
-          
-          return newLoadout
-      }
-
-      const targetItem = getItem(targetSection, targetIndex)
-      let amountToMove = item.count || 1
-      let newTargetItem = { ...item }
-
-      // Merge logic
-      if (targetItem && targetItem.id === item.id && targetItem.stackSize) {
-        const space = targetItem.stackSize - (targetItem.count || 1)
-        amountToMove = Math.min(amountToMove, space)
-        newTargetItem = { ...targetItem, count: (targetItem.count || 1) + amountToMove }
-      } else {
-        if (targetItem && isSplit) return prev // Cannot swap on split
-        newTargetItem = { ...item, count: amountToMove }
-      }
-
-      if (amountToMove === 0) return prev
-
-      setItem(targetSection, targetIndex, newTargetItem)
-
-      // Update Source
-      if (sourceSection !== 'inventory' && sourceIndex !== undefined) {
-        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
-            // Moving FROM a mod slot TO a regular slot (unequipping)
-            const sourceWeapon = (newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex]
-            if (sourceWeapon && sourceWeapon.modifications) {
-                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
-                newSourceWeapon.modifications[sourceModIndex] = null
-                ;(newLoadout[sourceSection as keyof LoadoutState] as (Item | null)[])[sourceIndex] = newSourceWeapon
-            }
-        } else {
-            const sourceItem = getItem(sourceSection as keyof LoadoutState, sourceIndex)
-            if (targetItem && targetItem.id !== item.id && !isSplit) {
-              // Swap
-              setItem(sourceSection as keyof LoadoutState, sourceIndex, targetItem)
-            } else {
-              const currentSourceCount = sourceItem?.count || 1
-              const remaining = currentSourceCount - amountToMove
-              setItem(
-                sourceSection as keyof LoadoutState,
-                sourceIndex,
-                remaining > 0 ? { ...sourceItem!, count: remaining } : null
-              )
-            }
-        }
-      }
-
-      // Check Shield Compatibility if Augment changed
-      if (targetSection === 'augment' || sourceSection === 'augment') {
-        const currentAugment = newLoadout.augment
-        const currentShield = newLoadout.shield
-        if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
-          console.log('[Loadout] Removing incompatible shield:', currentShield.name)
-          newLoadout.shield = null
-        }
-      }
-
-      return newLoadout
-    })
-    setDraggedItem(null)
-    setDropValidity(null)
-    setActiveSlot(null)
-    setDragSource(null)
-    setHoveredItem(null)
+    handleItemEquip(item, sourceSection, sourceIndex, sourceModIndex, isSplit, targetSection, targetIndex, targetModIndex)
   }
 
   const handleAppDrop = (e: DragEvent) => {
@@ -946,6 +1017,83 @@ function App() {
     setActiveSlot(null)
     setDragSource(null)
     setHoveredItem(null)
+  }
+
+  const handleInventoryDrop = (e: DragEvent) => {
+    console.log('[InventoryDrop] Item dropped on inventory panel')
+    e.preventDefault()
+    e.stopPropagation()
+    
+    let dropData: { item: Item; sourceSection: string; sourceIndex?: number; sourceModIndex?: number } | null = null
+    const jsonString = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain')
+    
+    if (jsonString) {
+       try { dropData = JSON.parse(jsonString) } catch (e) { console.error(e) }
+    }
+    
+    if (!dropData && draggedItem && dragSource) {
+        dropData = { item: draggedItem, sourceSection: dragSource.section, sourceIndex: dragSource.index, sourceModIndex: dragSource.modIndex }
+    }
+
+    if (!dropData) return
+    const { sourceSection, sourceIndex, sourceModIndex } = dropData
+
+    // Only unequip if dragging FROM equipment (not from inventory to inventory)
+    if (sourceSection === 'inventory') {
+      console.log('[InventoryDrop] Source is already inventory, ignoring')
+      return
+    }
+
+    // Unequip the item
+    if (sourceIndex !== undefined) {
+      setLoadout((prev) => {
+        const newLoadout = { ...prev }
+        const sec = sourceSection as keyof LoadoutState
+
+        if (sourceModIndex !== undefined && sourceModIndex !== -1) {
+            // Unequip mod
+            const sourceWeapon = (newLoadout[sec] as (Item | null)[])[sourceIndex]
+            if (sourceWeapon && sourceWeapon.modifications) {
+                const newSourceWeapon = { ...sourceWeapon, modifications: [...sourceWeapon.modifications] }
+                newSourceWeapon.modifications[sourceModIndex] = null
+                ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = newSourceWeapon
+            }
+        } else {
+            // Unequip regular item
+            if (sourceIndex !== -1 && Array.isArray(newLoadout[sec])) {
+              if (newLoadout[sec] === prev[sec]) {
+                ;(newLoadout[sec] as any) = [...(prev[sec] as any[])]
+              }
+              ;(newLoadout[sec] as (Item | null)[])[sourceIndex] = null
+            } else {
+              ;(newLoadout[sec] as any) = null
+            }
+        }
+
+        // Check Shield Compatibility if Augment removed
+        if (sec === 'augment') {
+           const currentAugment = newLoadout.augment
+           const currentShield = newLoadout.shield
+           if (currentShield && !isShieldCompatible(currentShield, currentAugment)) {
+             console.log('[InventoryDrop] Removing incompatible shield after augment unequip')
+             newLoadout.shield = null
+           }
+        }
+
+        return newLoadout
+      })
+    }
+    
+    setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
+    setDragSource(null)
+    setHoveredItem(null)
+  }
+
+  const handleInventoryDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
   }
 
   const handleSlotClick = (e: MouseEvent, section: keyof LoadoutState, index: number = -1, modIndex: number = -1) => {
@@ -1191,6 +1339,9 @@ function App() {
             draggable={!isFixedSlot}
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
+            onTouchStart={(e) => handleTouchStart(e, displayItem, section, index)}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={(e) => handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)}
             onMouseEnter={(e) => {
               if (draggedItem) return
               initialTooltipPos.current = { x: e.clientX, y: e.clientY }
@@ -1272,6 +1423,15 @@ function App() {
                                             handleDragStart(e, modItem, section, index, mIdx)
                                         }}
                                         onDragEnd={handleDragEnd}
+                                        onTouchStart={(e) => {
+                                            e.stopPropagation()
+                                            handleTouchStart(e, modItem, section, index, mIdx)
+                                        }}
+                                        onTouchMove={handleTouchMove}
+                                        onTouchEnd={(e) => {
+                                            e.stopPropagation()
+                                            handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)
+                                        }}
                                         onMouseEnter={(e) => {
                                             e.stopPropagation()
                                             if (draggedItem) return
@@ -1380,6 +1540,11 @@ function App() {
           }
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={(e) => handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)}
+          onDrop={handleInventoryDrop}
+          onDragOver={handleInventoryDragOver}
           getRarityClass={getRarityClass}
           activeFilter={activeFilter}
           search={search}

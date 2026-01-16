@@ -27,6 +27,11 @@ describe('InventoryPanel', () => {
   const mockOnVariantSelect = vi.fn()
   const mockOnDragStart = vi.fn()
   const mockOnDragEnd = vi.fn()
+  const mockOnTouchStart = vi.fn()
+  const mockOnTouchMove = vi.fn()
+  const mockOnTouchEnd = vi.fn()
+  const mockOnDrop = vi.fn()
+  const mockOnDragOver = vi.fn()
   const mockGetRarityClass = vi.fn((rarity: string) => `rarity-${rarity.toLowerCase()}`)
   const mockOnSearchChange = vi.fn()
   const mockOnFilterChange = vi.fn()
@@ -37,6 +42,11 @@ describe('InventoryPanel', () => {
     onVariantSelect: mockOnVariantSelect,
     onDragStart: mockOnDragStart,
     onDragEnd: mockOnDragEnd,
+    onTouchStart: mockOnTouchStart,
+    onTouchMove: mockOnTouchMove,
+    onTouchEnd: mockOnTouchEnd,
+    onDrop: mockOnDrop,
+    onDragOver: mockOnDragOver,
     getRarityClass: mockGetRarityClass,
     activeFilter: 'all',
     search: '',

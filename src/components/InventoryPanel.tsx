@@ -1,4 +1,4 @@
-import { DragEvent } from 'react'
+import { DragEvent, TouchEvent } from 'react'
 
 interface Item {
   id: string
@@ -16,6 +16,11 @@ interface InventoryPanelProps {
   onVariantSelect: (itemId: string, variantId: string) => void
   onDragStart: (e: DragEvent, item: Item, sourceSection: string) => void
   onDragEnd: () => void
+  onTouchStart: (e: TouchEvent, item: Item, sourceSection: string) => void
+  onTouchMove: (e: TouchEvent) => void
+  onTouchEnd: (e: TouchEvent) => void
+  onDrop: (e: DragEvent) => void
+  onDragOver: (e: DragEvent) => void
   getRarityClass: (rarity: string) => string
   activeFilter: string
   search: string
@@ -40,6 +45,11 @@ export function InventoryPanel({
   onVariantSelect,
   onDragStart,
   onDragEnd,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+  onDrop,
+  onDragOver,
   getRarityClass,
   activeFilter,
   search,
@@ -64,7 +74,11 @@ export function InventoryPanel({
             </button>
           ))}
         </div>
-        <div className="inventory-main">
+        <div 
+          className="inventory-main"
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+        >
           <input
             type="text"
             className="inventory-search-bar"
@@ -90,6 +104,9 @@ export function InventoryPanel({
                   draggable
                   onDragStart={(e) => onDragStart(e, activeItem, 'inventory')}
                   onDragEnd={onDragEnd}
+                  onTouchStart={(e) => onTouchStart(e, activeItem, 'inventory')}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
                 >
                   <div className="item-icon-placeholder">
                     {activeItem.isImage ? (

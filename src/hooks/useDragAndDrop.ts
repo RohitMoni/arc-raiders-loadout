@@ -1,4 +1,4 @@
-import { useState, useRef, DragEvent } from 'react'
+import { useState, useRef, DragEvent, TouchEvent } from 'react'
 
 interface Item {
   id: string
@@ -56,6 +56,8 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
   const initialTooltipPos = useRef({ x: 0, y: 0 })
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null)
+  const touchMoveThreshold = 10 // px to start drag
 
   const handleDragStart = (
     e: DragEvent,
@@ -175,6 +177,141 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     e.preventDefault()
   }
 
+  // Touch event handlers for mobile support
+  const handleTouchStart = (
+    e: TouchEvent,
+    item: Item,
+    sourceSection: string,
+    sourceIndex?: number,
+    sourceModIndex?: number
+  ) => {
+    const touch = e.touches[0]
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY }
+    
+    console.log('[TouchStart] Item:', item.name, 'Source:', sourceSection, 'Index:', sourceIndex, 'ModIndex:', sourceModIndex)
+    
+    let dragItem = { ...item }
+    let isSplit = false
+
+    if (sourceSection === 'inventory' && item.stackSize) {
+      dragItem.count = item.stackSize
+    } else if (sourceSection !== 'inventory' && !dragItem.count) {
+      dragItem.count = 1
+    }
+
+    // Calculate slot centers for latching
+    slotCenters.current.clear()
+    slotRefs.current.forEach((el, key) => {
+      const rect = el.getBoundingClientRect()
+      slotCenters.current.set(key, {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      })
+    })
+
+    setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
+    setDraggedItem(dragItem)
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!draggedItem || !touchStartPos.current) return
+    
+    const touch = e.touches[0]
+    const deltaX = Math.abs(touch.clientX - touchStartPos.current.x)
+    const deltaY = Math.abs(touch.clientY - touchStartPos.current.y)
+    
+    // Only start dragging if moved beyond threshold
+    if (deltaX < touchMoveThreshold && deltaY < touchMoveThreshold) {
+      return
+    }
+
+    e.preventDefault() // Prevent scrolling during drag
+
+    // Update ghost position
+    if (ghostRef.current) {
+      ghostRef.current.style.left = `${touch.clientX - 65}px`
+      ghostRef.current.style.top = `${touch.clientY - 65}px`
+    }
+
+    // Find closest slot (same logic as mouse drag)
+    let closestKey: string | null = null
+    let minDistance = Infinity
+    const threshold = 80 // px
+
+    slotCenters.current.forEach((center, key) => {
+      const dist = Math.sqrt(Math.pow(touch.clientX - center.x, 2) + Math.pow(touch.clientY - center.y, 2))
+      if (dist < minDistance) {
+        minDistance = dist
+        closestKey = key
+      }
+    })
+
+    if (closestKey && minDistance < threshold) {
+      const [section, indexStr, modIndexStr] = (closestKey as string).split('|')
+      const index = parseInt(indexStr)
+      const modIndex = modIndexStr ? parseInt(modIndexStr) : undefined
+
+      if (!activeSlot || activeSlot.section !== section || activeSlot.index !== index || activeSlot.modIndex !== modIndex) {
+        const isValid = canEquip(draggedItem, section, index, modIndex)
+        console.log('[TouchMove] New Active Slot:', section, index, modIndex, 'Valid:', isValid)
+        setActiveSlot({ section: section as keyof LoadoutState, index, modIndex })
+        setDropValidity(isValid ? 'valid' : 'invalid')
+      }
+    } else {
+      if (activeSlot) {
+        console.log('[TouchMove] Clearing Active Slot')
+        setActiveSlot(null)
+      }
+      if (dropValidity !== null) setDropValidity(null)
+    }
+  }
+
+  const handleTouchEnd = (
+    e: TouchEvent,
+    onSlotDrop?: (section: keyof LoadoutState, index: number, modIndex?: number) => void,
+    onInventoryDrop?: () => void
+  ) => {
+    console.log('[TouchEnd] Active Slot:', activeSlot)
+    console.log('[TouchEnd] DraggedItem:', draggedItem)
+    console.log('[TouchEnd] DragSource:', dragSource)
+    console.log('[TouchEnd] onInventoryDrop callback exists:', !!onInventoryDrop)
+    
+    if (activeSlot && onSlotDrop && draggedItem) {
+      // Trigger drop on the active slot
+      console.log('[TouchEnd] Dropping on active slot')
+      onSlotDrop(activeSlot.section, activeSlot.index, activeSlot.modIndex)
+    } else if (!activeSlot && draggedItem && dragSource && dragSource.section !== 'inventory' && onInventoryDrop) {
+      // Touch ended without an active slot, and dragging from equipment - check if over inventory panel
+      const touch = e.changedTouches[0]
+      console.log('[TouchEnd] Touch position:', touch.clientX, touch.clientY)
+      const element = document.elementFromPoint(touch.clientX, touch.clientY)
+      console.log('[TouchEnd] Element at touch point:', element?.className, element?.tagName)
+      
+      // Check if the element is within the inventory panel
+      const inventoryPanel = element?.closest('.inventory-main')
+      console.log('[TouchEnd] Found inventory panel:', !!inventoryPanel)
+      if (inventoryPanel) {
+        console.log('[TouchEnd] Dropped on inventory panel, unequipping')
+        onInventoryDrop()
+      }
+    } else {
+      console.log('[TouchEnd] Did not trigger any drop action. Reasons:', {
+        hasActiveSlot: !!activeSlot,
+        hasDraggedItem: !!draggedItem,
+        hasDragSource: !!dragSource,
+        dragSourceSection: dragSource?.section,
+        hasInventoryDropCallback: !!onInventoryDrop
+      })
+    }
+
+    // Clear all drag state
+    setDraggedItem(null)
+    setDropValidity(null)
+    setActiveSlot(null)
+    setDragSource(null)
+    touchStartPos.current = null
+  }
+
   return {
     // State
     draggedItem,
@@ -201,5 +338,8 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     handleLoadoutPanelDragOver,
     handleLoadoutPanelDrop,
     handleGlobalDragOverCapture,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
   }
 }
