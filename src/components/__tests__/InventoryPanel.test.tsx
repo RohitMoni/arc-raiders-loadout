@@ -95,7 +95,7 @@ describe('InventoryPanel', () => {
 
   describe('Filter Buttons', () => {
     it('should mark active filter as active', () => {
-      const { container } = render(
+      render(
         <InventoryPanel {...defaultProps} activeFilter="Weapon" />
       )
       

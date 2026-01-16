@@ -289,7 +289,7 @@ describe('LoadoutPanel', () => {
 
   describe('Share Button Icon', () => {
     it('should have SVG in share button', () => {
-      const { container } = render(<LoadoutPanel {...defaultProps} />)
+      render(<LoadoutPanel {...defaultProps} />)
       
       const shareBtn = screen.getByText('SHARE LOADOUT')
       const svg = shareBtn.querySelector('svg')
@@ -298,7 +298,7 @@ describe('LoadoutPanel', () => {
     })
 
     it('should have correct SVG attributes', () => {
-      const { container } = render(<LoadoutPanel {...defaultProps} />)
+      render(<LoadoutPanel {...defaultProps} />)
       
       const shareBtn = screen.getByText('SHARE LOADOUT')
       const svg = shareBtn.querySelector('svg')
