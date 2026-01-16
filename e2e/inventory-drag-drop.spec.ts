@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { dragAndDrop, waitForElement, waitForDragDropComplete, waitForPageReady } from './helpers'
+import { dragAndDrop, waitForElement, waitForDragDropComplete, waitForPageReady, setupAPICache } from './helpers'
 
 test.describe('Inventory Drag and Drop', () => {
   test.beforeEach(async ({ page }) => {
+    // Setup API route interception to serve from cache
+    await setupAPICache(page)
     // Navigate to the app
     await page.goto('/')
     // Wait for page to be ready with event-based helper

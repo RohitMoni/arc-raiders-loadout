@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { touchDragAndDrop, waitForElement, waitForDragDropComplete, waitForPageReady } from './helpers'
+import { touchDragAndDrop, waitForElement, waitForDragDropComplete, waitForPageReady, setupAPICache } from './helpers'
 
 test.describe('Inventory Drag and Drop - Mobile Touch', () => {
   // Only run these tests on mobile projects
@@ -12,6 +12,8 @@ test.describe('Inventory Drag and Drop - Mobile Touch', () => {
   })
 
   test.beforeEach(async ({ page }) => {
+    // Setup API route interception to serve from cache
+    await setupAPICache(page)
     await page.goto('/')
     await waitForPageReady(page)
   })

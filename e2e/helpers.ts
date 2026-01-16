@@ -147,3 +147,67 @@ export async function touchDragAndDrop(
   // Give React time to process the drop and state updates
   await page.waitForTimeout(500);
 }
+
+/**
+ * Setup API caching using localStorage to avoid rate limiting
+ * Call this AFTER page.goto() to cache GitHub API responses
+ * @param page - Playwright page object
+ */
+export async function setupAPICache(page: Page): Promise<void> {
+  // Capture API responses and save to localStorage
+  await page.route('https://api.github.com/repos/RohitMoni/arc-raiders-data/contents/items', async (route) => {
+    // Check if we have cached data
+    const cached = await page.evaluate(() => localStorage.getItem('e2e_api_files'))
+    
+    if (cached) {
+      // Serve from cache
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: cached
+      })
+    } else {
+      // Let request continue and cache the response
+      const response = await route.fetch()
+      const body = await response.text()
+      await page.evaluate((data) => localStorage.setItem('e2e_api_files', data), body)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: body
+      })
+    }
+  })
+
+  // Intercept individual file downloads
+  await page.route('**/raw.githubusercontent.com/**/*.json', async (route) => {
+    const url = route.request().url()
+    const fileName = url.split('/').pop() || ''
+    const cacheKey = `e2e_api_item_${fileName}`
+    
+    // Check cache
+    const cached = await page.evaluate((key) => localStorage.getItem(key), cacheKey)
+    
+    if (cached) {
+      // Serve from cache
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: cached
+      })
+    } else {
+      // Fetch and cache
+      const response = await route.fetch()
+      const body = await response.text()
+      await page.evaluate(
+        ([key, data]) => localStorage.setItem(key, data),
+        [cacheKey, body]
+      )
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: body
+      })
+    }
+  })
+}
