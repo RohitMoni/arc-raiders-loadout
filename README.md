@@ -20,16 +20,17 @@ Note: It utterly failed when doing large-scale data manipulations on the data re
 
 ## Requirements
 
-[nodejs + npm](https://nodejs.org/en/download/)
+[nodejs](https://nodejs.org/en/download/)
+[pnpm](https://pnpm.io/)
 
 ## Getting Started
 
 * Clone the repo
-* Run `npm install`
+* Run `pnpm install`
 
 ### Local 
 
-* Run `npm run dev` to host a local server that you can see in your browser
+* Run `pnpm run dev` to host a local server that you can see in your browser
 
 ### Deployment
 
