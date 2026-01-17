@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'large-tablet'
 
