@@ -43,6 +43,15 @@ Deployed on [Vercel](https://vercel.com/).
 This is a client-side application, no auth, no database.
 All Arc Raiders item data is pulled from https://github.com/RohitMoni/arc-raiders-data which is a fork of https://github.com/RaidTheory/arcraiders-data
 
+### Testing
+* Run unit tests
+* Run `pnpm test:run`
+
+* Run e2e tests
+* Run `pnpm exec playwright test`
+
+* Build to ensure TS strict level compilation before deployment
+* `pnpm build`
 
 ## Credits
 

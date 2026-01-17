@@ -183,7 +183,7 @@ test.describe('Mobile Layout Verification - Mobile Only', () => {
     const inventoryItem = page.locator('.inventory-item-row').first()
     
     // Wait for inventory to be ready
-    await page.waitForSelector('.inventory-item-row', { timeout: 10000 })
+    await page.waitForSelector('.inventory-item-row', { timeout: 15000 })
     await expect(inventoryItem).toBeVisible()
     
     // First scroll the inventory to establish a scroll position

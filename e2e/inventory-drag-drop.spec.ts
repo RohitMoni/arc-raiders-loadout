@@ -276,3 +276,104 @@ test.describe('Inventory Drag and Drop', () => {
     await expect(equippedMod).toBeVisible()
   })
 })
+
+test.describe('Loot Table Modal', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupAPICache(page)
+    await page.goto('/')
+    await waitForPageReady(page)
+  })
+
+  test('should show "No craftable items in loadout" with empty equipment', async ({ page }) => {
+    // Click the loot table button in the footer
+    const lootButton = page.locator('button.loot-btn').filter({ hasText: 'LOOT LIST' }).first()
+    await lootButton.click()
+    
+    // Wait for modal to appear
+    const modal = page.locator('.loot-modal')
+    await expect(modal).toBeVisible()
+    
+    // Verify title
+    await expect(page.locator('.loot-title')).toHaveText('REQUIRED LOOT')
+    
+    // Verify empty state message
+    await expect(page.locator('.loot-list')).toContainText('No craftable items in loadout')
+    
+    // Close modal
+    const closeButton = page.locator('.close-btn')
+    await closeButton.click()
+    await expect(modal).not.toBeVisible()
+  })
+
+  test('should show "No craftable items in loadout" with non-craftable item', async ({ page }) => {
+    // Search for Acoustic Guitar
+    const searchInput = page.locator('input[placeholder="Search items..."]')
+    await searchInput.fill('Acoustic Guitar')
+    
+    // Wait for search results
+    await waitForElement(page.locator('.inventory-item-row').first())
+    
+    // Drag Acoustic Guitar to backpack
+    const guitarItem = page.locator('.inventory-item-row').filter({ hasText: 'Acoustic Guitar' }).first()
+    const backpackSlot = page.locator('.backpack-grid .grid-item').first()
+    
+    await dragAndDrop(page, guitarItem, backpackSlot)
+    await waitForDragDropComplete(backpackSlot)
+    
+    // Clear search
+    await searchInput.fill('')
+    
+    // Click loot table button
+    const lootButton = page.locator('button.loot-btn').filter({ hasText: 'LOOT LIST' }).first()
+    await lootButton.click()
+    
+    // Wait for modal
+    const modal = page.locator('.loot-modal')
+    await expect(modal).toBeVisible()
+    
+    // Verify empty state message (Acoustic Guitar doesn't have a recipe)
+    await expect(page.locator('.loot-list')).toContainText('No craftable items in loadout')
+  })
+
+  test('should display correct loot list for Adrenaline Shot', async ({ page }) => {
+    // Search for Adrenaline Shot
+    const searchInput = page.locator('input[placeholder="Search items..."]')
+    await searchInput.fill('Adrenaline Shot')
+    
+    // Wait for search results
+    await waitForElement(page.locator('.inventory-item-row').first())
+    
+    // Drag Adrenaline Shot to quick use slot
+    const adrenalineItem = page.locator('.inventory-item-row').filter({ hasText: 'Adrenaline Shot' }).first()
+    const quickUseSlot = page.locator('.quick-use-grid .grid-item').first()
+    
+    await dragAndDrop(page, adrenalineItem, quickUseSlot)
+    await waitForDragDropComplete(quickUseSlot)
+    
+    // Clear search
+    await searchInput.fill('')
+    
+    // Click loot table button
+    const lootButton = page.locator('button.loot-btn').filter({ hasText: 'LOOT LIST' }).first()
+    await lootButton.click()
+    
+    // Wait for modal
+    const modal = page.locator('.loot-modal')
+    await expect(modal).toBeVisible()
+    
+    // Verify loot items - Adrenaline Shot (5 stack) requires 3 chemicals and 3 plastic parts each
+    // So total should be 15 chemicals and 15 plastic parts
+    const lootItems = page.locator('.loot-item')
+    
+    // Find Chemical entry
+    const chemicalItem = lootItems.filter({ hasText: 'Chemical' }).first()
+    await expect(chemicalItem).toBeVisible()
+    await expect(chemicalItem.locator('.loot-count')).toHaveText('15')
+    
+    // Find Plastic Parts entry
+    const plasticItem = lootItems.filter({ hasText: 'Plastic Parts' }).first()
+    await expect(plasticItem).toBeVisible()
+    await expect(plasticItem.locator('.loot-count')).toHaveText('15')
+  })
+})
+
