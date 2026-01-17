@@ -1160,8 +1160,8 @@
 
   .inventory-panel {
     flex: none;
-    height: 40%;
-    min-height: 300px;
+    height: 35%;
+    min-height: 280px;
   }
 
   .loadout-panel {
@@ -1318,32 +1318,40 @@
     margin-bottom: 16px;
   }
 
-  .weapon-slot {
-    margin-bottom: 12px;
-  }
-
   .weapons-section {
     margin-top: 16px;
     padding: 0 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .weapons-section .section-title {
+    grid-column: 1 / -1;
+  }
+
+  .weapon-slot {
+    margin-bottom: 0;
   }
 
   .backpack-grid {
     grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    grid-template-rows: auto;
     gap: 8px;
   }
 
   .quick-use-grid {
-    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    grid-template-columns: repeat(3, minmax(60px, 80px));
     gap: 8px;
   }
 
   .extra-grid {
-    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    grid-template-columns: repeat(3, minmax(60px, 80px));
     gap: 8px;
   }
 
   .safe-pocket-grid {
-    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    grid-template-columns: repeat(3, minmax(60px, 80px));
     gap: 8px;
   }
 
@@ -1365,6 +1373,11 @@
   .section-title {
     font-size: 14px;
     margin-bottom: 8px;
+    margin-top: 16px;
+  }
+
+  .section-title:first-child {
+    margin-top: 0;
   }
 
   .grid-item {
@@ -1401,34 +1414,34 @@
   .loadout-actions-mobile {
     order: 5;
     margin-top: auto;
-    padding-top: 16px;
+    padding-top: 12px;
     background: rgba(13, 16, 28, 0.95);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .loadout-actions-mobile .loadout-actions-row {
-    padding: 12px 16px 8px 16px;
+    padding: 8px 12px 6px 12px;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     justify-content: center;
   }
 
   .loadout-actions-mobile .loadout-actions-row button {
     flex: 1;
     min-width: 100px;
-    font-size: 12px;
-    padding: 12px 16px;
+    font-size: 11px;
+    padding: 10px 12px;
     /* Better touch targets */
-    min-height: 44px;
+    min-height: 40px;
     touch-action: manipulation;
   }
 
   .loadout-actions-mobile .loadout-links-row {
-    padding: 8px 16px 16px 16px;
+    padding: 6px 12px 12px 12px;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     justify-content: center;
   }
 
@@ -1436,7 +1449,7 @@
     flex: 1;
     min-width: 90px;
     text-align: center;
-    padding: 8px 12px;
+    padding: 6px 10px;
     font-size: 10px;
     /* Better touch targets */
     min-height: 36px;

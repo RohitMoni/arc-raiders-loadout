@@ -275,10 +275,10 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     }
 
     // Check if we're in the auto-scroll zone - if so, skip slot detection for smooth scrolling
-    // Only apply in mobile viewports (< 768px)
+    // Only apply in mobile viewports (< 768px) and reduce threshold to avoid blocking bottom slots
     const isMobileViewport = window.innerWidth < 768
     const viewportHeight = window.innerHeight
-    const scrollThreshold = viewportHeight * 0.25
+    const scrollThreshold = viewportHeight * 0.10
     const inAutoScrollZone = isMobileViewport && touch.clientY > viewportHeight - scrollThreshold
 
     // Skip slot detection if in auto-scroll zone to prevent jitter
