@@ -93,6 +93,11 @@
   box-sizing: border-box;
 }
 
+.content-grid.scroll-locked {
+  overflow: hidden !important;
+  touch-action: none !important;
+}
+
 .equipment-mobile-layout {
   display: contents; /* Allow children to participate in parent grid */
 }
@@ -225,6 +230,17 @@
   gap: 8px;
   overflow-y: auto;
   padding-right: 8px;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.inventory-list::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+.inventory-list.scroll-locked {
+  overflow: hidden !important;
+  touch-action: none !important;
 }
 
 .inventory-item-row {

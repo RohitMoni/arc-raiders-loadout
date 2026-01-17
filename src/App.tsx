@@ -443,24 +443,26 @@ function App() {
       lastPointerY = clientY
     }
 
-    // Auto-scroll based on pointer position in content-grid
+    // Auto-scroll based on pointer position in viewport (lower 25% of screen)
     const autoScroll = () => {
-      const rect = contentGrid.getBoundingClientRect()
-      const contentGridHeight = rect.height
-      const scrollThreshold = contentGridHeight * 0.25 // 25% from top/bottom
+      const viewportHeight = window.innerHeight
+      const scrollThreshold = viewportHeight * 0.25 // 25% from bottom of viewport
       
-      // Position relative to content-grid
-      const pointerYRelative = lastPointerY - rect.top
+      // Pointer position relative to viewport
+      const pointerYRelative = lastPointerY
 
-      // Scroll speed based on how close to edge (0-50px in from edge = max speed)
+      // Scroll speed
       const scrollSpeed = 5
 
-      if (pointerYRelative < scrollThreshold) {
-        // Near top - scroll up
-        contentGrid.scrollTop -= scrollSpeed
-      } else if (pointerYRelative > contentGridHeight - scrollThreshold) {
-        // Near bottom - scroll down
+      if (pointerYRelative > viewportHeight - scrollThreshold) {
+        // Near bottom of viewport - scroll down
+        const previousScrollTop = contentGrid.scrollTop
         contentGrid.scrollTop += scrollSpeed
+        const actualScroll = contentGrid.scrollTop - previousScrollTop
+        
+        // Adjust lastPointerY to compensate for scroll movement
+        // When content scrolls down, pointer needs to move down relative to viewport to stay over same content
+        lastPointerY += actualScroll
       }
     }
 
@@ -472,6 +474,9 @@ function App() {
     const inventoryList = document.querySelector('.inventory-list') as HTMLElement
     if (inventoryList) {
       const initialInventoryScroll = inventoryList.scrollTop
+      
+      // Add scroll-locked class to completely disable scrolling
+      inventoryList.classList.add('scroll-locked')
       
       const lockInventoryScroll = () => {
         if (inventoryList.scrollTop !== initialInventoryScroll) {
@@ -485,6 +490,7 @@ function App() {
       autoScrollInterval = setInterval(autoScroll, 16) // ~60fps
 
       return () => {
+        inventoryList.classList.remove('scroll-locked')
         inventoryList.removeEventListener('scroll', lockInventoryScroll)
         document.removeEventListener('pointermove', handlePointerMove)
         document.removeEventListener('touchmove', handlePointerMove)
@@ -545,10 +551,14 @@ function App() {
     document.addEventListener('pointermove', handlePointerMove)
     document.addEventListener('touchmove', handlePointerMove)
 
+    // Add scroll-locked class to prevent manual scrolling during auto-scroll
+    contentGrid.classList.add('scroll-locked')
+
     // Start auto-scroll timer
     autoScrollInterval = setInterval(autoScroll, 16) // ~60fps
 
     return () => {
+      contentGrid.classList.remove('scroll-locked')
       document.removeEventListener('pointermove', handlePointerMove)
       document.removeEventListener('touchmove', handlePointerMove)
       if (autoScrollInterval) clearInterval(autoScrollInterval)

@@ -56,7 +56,11 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
   const initialTooltipPos = useRef({ x: 0, y: 0 })
+  
+  // Touch handling refs
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
+  const lastTouchPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const autoScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const touchMoveThreshold = 10 // px to start drag
 
   const handleDragStart = (
@@ -187,6 +191,7 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
   ) => {
     const touch = e.touches[0]
     touchStartPos.current = { x: touch.clientX, y: touch.clientY }
+    lastTouchPos.current = { x: touch.clientX, y: touch.clientY }
     
     console.log('[TouchStart] Item:', item.name, 'Source:', sourceSection, 'Index:', sourceIndex, 'ModIndex:', sourceModIndex)
     
@@ -211,12 +216,30 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
 
     setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
     setDraggedItem(dragItem)
+    
+    // Start auto-scroll interval for loadout panel
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current)
+    }
+    autoScrollInterval.current = setInterval(() => {
+      const contentGrid = document.querySelector('.content-grid') as HTMLElement
+      if (contentGrid && lastTouchPos.current) {
+        const viewportHeight = window.innerHeight
+        const scrollThreshold = viewportHeight * 0.25
+        
+        if (lastTouchPos.current.y > viewportHeight - scrollThreshold) {
+          contentGrid.scrollTop += 5
+        }
+      }
+    }, 16) // ~60fps
   }
 
   const handleTouchMove = (e: TouchEvent) => {
     if (!draggedItem || !touchStartPos.current) return
     
     const touch = e.touches[0]
+    lastTouchPos.current = { x: touch.clientX, y: touch.clientY }
+    
     const deltaX = Math.abs(touch.clientX - touchStartPos.current.x)
     const deltaY = Math.abs(touch.clientY - touchStartPos.current.y)
     
@@ -233,20 +256,32 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
       ghostRef.current.style.top = `${touch.clientY - 65}px`
     }
 
-    // Find closest slot (same logic as mouse drag)
+    // Find closest slot using bounding box intersection instead of center distance
     let closestKey: string | null = null
-    let minDistance = Infinity
-    const threshold = 80 // px
 
-    slotCenters.current.forEach((center, key) => {
-      const dist = Math.sqrt(Math.pow(touch.clientX - center.x, 2) + Math.pow(touch.clientY - center.y, 2))
-      if (dist < minDistance) {
-        minDistance = dist
-        closestKey = key
-      }
-    })
+    // Check if touch is over footer or other non-slot elements
+    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY)
+    const isOverFooter = elementAtPoint?.closest('.footer-buttons') || 
+                        elementAtPoint?.closest('button') ||
+                        elementAtPoint?.classList.contains('icon-btn')
 
-    if (closestKey && minDistance < threshold) {
+    // Only check for slot intersection if not over footer/buttons
+    if (!isOverFooter) {
+      slotRefs.current.forEach((el, key) => {
+        const rect = el.getBoundingClientRect()
+        // Check if touch point is within the slot bounds
+        if (
+          touch.clientX >= rect.left &&
+          touch.clientX <= rect.right &&
+          touch.clientY >= rect.top &&
+          touch.clientY <= rect.bottom
+        ) {
+          closestKey = key
+        }
+      })
+    }
+
+    if (closestKey) {
       const [section, indexStr, modIndexStr] = (closestKey as string).split('|')
       const index = parseInt(indexStr)
       const modIndex = modIndexStr ? parseInt(modIndexStr) : undefined
@@ -310,6 +345,12 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     setActiveSlot(null)
     setDragSource(null)
     touchStartPos.current = null
+    
+    // Clear auto-scroll interval
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current)
+      autoScrollInterval.current = null
+    }
   }
 
   return {

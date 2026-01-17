@@ -1,16 +1,15 @@
 import { test, expect } from '@playwright/test'
 import { touchDragAndDrop, waitForElement, waitForPageReady, setupAPICache } from './helpers'
 
+test.describe.configure({ mode: 'serial' })
+
 test.describe('Drag and Drop Scroll Behavior - Mobile', () => {
-  // Only run these tests on mobile projects
-  test.skip(({ browserName }) => browserName !== 'chromium' && browserName !== 'webkit', 
-    'Touch tests only run on mobile devices')
-
-  test.use({
-    viewport: { width: 390, height: 844 } // iPhone 14 Pro dimensions
-  })
-
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Only run these tests on mobile projects
+    if (!['mobile-chrome', 'mobile-safari', 'tablet-safari'].includes(testInfo.project.name)) {
+      test.skip()
+    }
+    
     await setupAPICache(page)
     await page.goto('/')
     await waitForPageReady(page)
@@ -87,18 +86,24 @@ test.describe('Drag and Drop Scroll Behavior - Mobile', () => {
     const inventoryItem = page.locator('.inventory-item-row').first()
     await expect(inventoryItem).toBeVisible()
 
-    // Get loadout panel dimensions
+    // Get viewport dimensions
+    const viewportSize = page.viewportSize()
+    if (!viewportSize) {
+      throw new Error('Could not get viewport size')
+    }
+    
+    const viewportHeight = viewportSize.height
+    const threshold25 = viewportHeight * 0.25
+    // Position in middle of lower 25% of viewport
+    const targetY = viewportHeight - threshold25 / 2
+    
+    // Get loadout panel for targetX
     const contentGrid = page.locator('.content-grid')
     const loadoutBox = await contentGrid.boundingBox()
     
     if (!loadoutBox) {
       throw new Error('Could not get loadout bounding box')
     }
-
-    // Calculate position in lower 25% of loadout panel
-    const loadoutHeight = loadoutBox.height
-    const threshold25 = loadoutHeight * 0.25
-    const targetY = loadoutBox.y + loadoutHeight - threshold25 / 2 // Middle of the lower 25% zone
     const targetX = loadoutBox.x + loadoutBox.width / 2
 
     // Get source position
@@ -122,7 +127,7 @@ test.describe('Drag and Drop Scroll Behavior - Mobile', () => {
 
     await page.waitForTimeout(50)
 
-    // Move to lower 25% of loadout
+    // Move to lower 25% of viewport
     await inventoryItem.dispatchEvent('touchmove', {
       touches: [{ clientX: targetX, clientY: targetY, identifier: 0 }],
       changedTouches: [{ clientX: targetX, clientY: targetY, identifier: 0 }],
