@@ -259,14 +259,15 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     // Find closest slot using bounding box intersection instead of center distance
     let closestKey: string | null = null
 
-    // Check if touch is over footer or other non-slot elements
+    // Check if touch is over footer, inventory, or other non-slot elements
     const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY)
     const isOverFooter = elementAtPoint?.closest('.footer-buttons') || 
                         elementAtPoint?.closest('button') ||
                         elementAtPoint?.classList.contains('icon-btn')
+    const isOverInventory = elementAtPoint?.closest('.inventory-main')
 
-    // Only check for slot intersection if not over footer/buttons
-    if (!isOverFooter) {
+    // Only check for slot intersection if not over footer/buttons/inventory
+    if (!isOverFooter && !isOverInventory) {
       slotRefs.current.forEach((el, key) => {
         const rect = el.getBoundingClientRect()
         // Check if touch point is within the slot bounds
