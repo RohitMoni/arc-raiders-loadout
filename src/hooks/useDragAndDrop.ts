@@ -232,21 +232,24 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
     setDraggedItem(dragItem)
     
-    // Start auto-scroll interval for loadout panel
-    if (autoScrollInterval.current) {
-      clearInterval(autoScrollInterval.current)
-    }
-    autoScrollInterval.current = setInterval(() => {
-      const contentGrid = document.querySelector('.content-grid') as HTMLElement
-      if (contentGrid && lastTouchPos.current) {
-        const viewportHeight = window.innerHeight
-        const scrollThreshold = viewportHeight * 0.25
-        
-        if (lastTouchPos.current.y > viewportHeight - scrollThreshold) {
-          contentGrid.scrollTop += 5
-        }
+    // Start auto-scroll interval for loadout panel (mobile only, < 768px)
+    const isMobileViewport = window.innerWidth < 768
+    if (isMobileViewport) {
+      if (autoScrollInterval.current) {
+        clearInterval(autoScrollInterval.current)
       }
-    }, 16) // ~60fps
+      autoScrollInterval.current = setInterval(() => {
+        const contentGrid = document.querySelector('.content-grid') as HTMLElement
+        if (contentGrid && lastTouchPos.current) {
+          const viewportHeight = window.innerHeight
+          const scrollThreshold = viewportHeight * 0.25
+          
+          if (lastTouchPos.current.y > viewportHeight - scrollThreshold) {
+            contentGrid.scrollTop += 5
+          }
+        }
+      }, 16) // ~60fps
+    }
   }
 
   const handleTouchMove = (e: TouchEvent) => {
@@ -272,9 +275,11 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     }
 
     // Check if we're in the auto-scroll zone - if so, skip slot detection for smooth scrolling
+    // Only apply in mobile viewports (< 768px)
+    const isMobileViewport = window.innerWidth < 768
     const viewportHeight = window.innerHeight
     const scrollThreshold = viewportHeight * 0.25
-    const inAutoScrollZone = touch.clientY > viewportHeight - scrollThreshold
+    const inAutoScrollZone = isMobileViewport && touch.clientY > viewportHeight - scrollThreshold
 
     // Skip slot detection if in auto-scroll zone to prevent jitter
     if (inAutoScrollZone) {
@@ -294,7 +299,6 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     
     // Only skip slot detection for footer/buttons on mobile (< 768px)
     // On desktop/tablet, we still want to detect slots even if over buttons
-    const isMobileViewport = window.innerWidth < 768
     const isOverFooter = isMobileViewport && (
       elementAtPoint?.closest('.footer-buttons') || 
       elementAtPoint?.closest('button') ||
