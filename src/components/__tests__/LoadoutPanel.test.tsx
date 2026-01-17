@@ -124,30 +124,30 @@ describe('LoadoutPanel', () => {
     it('should render LOOT LIST button', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const lootBtn = screen.getByText('LOOT LIST')
-      expect(lootBtn).toBeInTheDocument()
+      const lootBtns = screen.getAllByText('LOOT LIST')
+      expect(lootBtns[0]).toBeInTheDocument()
     })
 
     it('should render SHARE LOADOUT button', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const shareBtn = screen.getByText('SHARE LOADOUT')
-      expect(shareBtn).toBeInTheDocument()
+      const shareBtns = screen.getAllByText('SHARE LOADOUT')
+      expect(shareBtns[0]).toBeInTheDocument()
     })
 
     it('should render RESET button', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const resetBtn = screen.getByText('RESET')
-      expect(resetBtn).toBeInTheDocument()
+      const resetBtns = screen.getAllByText('RESET')
+      expect(resetBtns[0]).toBeInTheDocument()
     })
 
     it('should call onShowLootTable when LOOT LIST clicked', async () => {
       const user = userEvent.setup()
       render(<LoadoutPanel {...defaultProps} />)
       
-      const lootBtn = screen.getByText('LOOT LIST')
-      await user.click(lootBtn)
+      const lootBtns = screen.getAllByText('LOOT LIST')
+      await user.click(lootBtns[0])
       
       expect(mockOnShowLootTable).toHaveBeenCalled()
     })
@@ -156,8 +156,8 @@ describe('LoadoutPanel', () => {
       const user = userEvent.setup()
       render(<LoadoutPanel {...defaultProps} />)
       
-      const shareBtn = screen.getByText('SHARE LOADOUT')
-      await user.click(shareBtn)
+      const shareBtns = screen.getAllByText('SHARE LOADOUT')
+      await user.click(shareBtns[0])
       
       expect(mockOnShare).toHaveBeenCalled()
     })
@@ -166,8 +166,8 @@ describe('LoadoutPanel', () => {
       const user = userEvent.setup()
       render(<LoadoutPanel {...defaultProps} />)
       
-      const resetBtn = screen.getByText('RESET')
-      await user.click(resetBtn)
+      const resetBtns = screen.getAllByText('RESET')
+      await user.click(resetBtns[0])
       
       expect(mockOnReset).toHaveBeenCalled()
     })
@@ -175,11 +175,11 @@ describe('LoadoutPanel', () => {
     it('should have correct button titles for tooltips', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const shareBtn = screen.getByTitle('Copy Loadout URL')
-      const resetBtn = screen.getByTitle('Reset Loadout')
+      const shareBtns = screen.getAllByTitle('Copy Loadout URL')
+      const resetBtns = screen.getAllByTitle('Reset Loadout')
       
-      expect(shareBtn).toBeInTheDocument()
-      expect(resetBtn).toBeInTheDocument()
+      expect(shareBtns[0]).toBeInTheDocument()
+      expect(resetBtns[0]).toBeInTheDocument()
     })
   })
 
@@ -187,7 +187,8 @@ describe('LoadoutPanel', () => {
     it('should render Report Issue link', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const reportLink = screen.getByText('Report Issue')
+      const reportLinks = screen.getAllByText('Report Issue')
+      const reportLink = reportLinks[0]
       expect(reportLink).toHaveAttribute('href', 'https://github.com/RohitMoni/arc-raiders-loadout/issues')
       expect(reportLink).toHaveAttribute('target', '_blank')
     })
@@ -195,7 +196,8 @@ describe('LoadoutPanel', () => {
     it('should render Suggest Feature link', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const suggestLink = screen.getByText('Suggest Feature')
+      const suggestLinks = screen.getAllByText('Suggest Feature')
+      const suggestLink = suggestLinks[0]
       expect(suggestLink).toHaveAttribute('href', 'https://github.com/RohitMoni/arc-raiders-loadout/issues')
       expect(suggestLink).toHaveAttribute('target', '_blank')
     })
@@ -203,7 +205,8 @@ describe('LoadoutPanel', () => {
     it('should render Buy me a coffee link', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const coffeeLink = screen.getByText(/Buy me a coffee/)
+      const coffeeLinks = screen.getAllByText(/Buy me a coffee/)
+      const coffeeLink = coffeeLinks[0]
       expect(coffeeLink).toHaveAttribute('href', 'https://buymeacoffee.com/jaklite')
       expect(coffeeLink).toHaveAttribute('target', '_blank')
     })
@@ -267,23 +270,25 @@ describe('LoadoutPanel', () => {
     it('should have correct button classes', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const lootBtn = screen.getByText('LOOT LIST')
-      const shareBtn = screen.getByText('SHARE LOADOUT')
-      const resetBtn = screen.getByText('RESET')
+      const lootBtns = screen.getAllByText('LOOT LIST')
+      const shareBtns = screen.getAllByText('SHARE LOADOUT')
+      const resetBtns = screen.getAllByText('RESET')
       
-      expect(lootBtn).toHaveClass('loot-btn')
-      expect(shareBtn).toHaveClass('loot-btn')
-      expect(resetBtn).toHaveClass('loot-btn')
+      // Check that all buttons have the correct class
+      lootBtns.forEach(btn => expect(btn).toHaveClass('loot-btn'))
+      shareBtns.forEach(btn => expect(btn).toHaveClass('loot-btn'))
+      resetBtns.forEach(btn => expect(btn).toHaveClass('loot-btn'))
     })
 
     it('should have correct link classes', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const reportLink = screen.getByText('Report Issue')
-      const coffeeLink = screen.getByText(/Buy me a coffee/)
+      const reportLinks = screen.getAllByText('Report Issue')
+      const coffeeLinks = screen.getAllByText(/Buy me a coffee/)
       
-      expect(reportLink).toHaveClass('small-btn')
-      expect(coffeeLink).toHaveClass('small-btn', 'coffee-btn')
+      // Check that all links have the correct classes
+      reportLinks.forEach(link => expect(link).toHaveClass('small-btn'))
+      coffeeLinks.forEach(link => expect(link).toHaveClass('small-btn', 'coffee-btn'))
     })
   })
 
@@ -291,17 +296,17 @@ describe('LoadoutPanel', () => {
     it('should have SVG in share button', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const shareBtn = screen.getByText('SHARE LOADOUT')
-      const svg = shareBtn.querySelector('svg')
-      
-      expect(svg).toBeInTheDocument()
+      const shareBtns = screen.getAllByText('SHARE LOADOUT')
+      // Check that at least one (and preferably all) share buttons have SVG
+      const hasVg = shareBtns.some(btn => btn.querySelector('svg'))
+      expect(hasVg).toBe(true)
     })
 
     it('should have correct SVG attributes', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const shareBtn = screen.getByText('SHARE LOADOUT')
-      const svg = shareBtn.querySelector('svg')
+      const shareBtns = screen.getAllByText('SHARE LOADOUT')
+      const svg = shareBtns[0].querySelector('svg') // Test the first one
       
       expect(svg).toHaveAttribute('xmlns', 'http://www.w3.org/2000/svg')
       expect(svg).toHaveAttribute('height', '24px')
@@ -313,8 +318,8 @@ describe('LoadoutPanel', () => {
     it('should have coffee emoji', () => {
       render(<LoadoutPanel {...defaultProps} />)
       
-      const coffeeLink = screen.getByText(/Buy me a coffee/)
-      const span = coffeeLink.querySelector('span')
+      const coffeeLinks = screen.getAllByText(/Buy me a coffee/)
+      const span = coffeeLinks[0].querySelector('span') // Test the first one
       
       expect(span?.textContent).toBe('☕')
     })

@@ -1,4 +1,5 @@
 import { DragEvent, TouchEvent } from 'react'
+import { useDeviceDetection } from '../hooks/useDeviceDetection'
 
 interface Item {
   id: string
@@ -26,6 +27,7 @@ interface InventoryPanelProps {
   search: string
   onSearchChange: (value: string) => void
   onFilterChange: (filter: string) => void
+  isDragging?: boolean
 }
 
 const FILTER_BUTTONS = [
@@ -55,7 +57,10 @@ export function InventoryPanel({
   search,
   onSearchChange,
   onFilterChange,
+  isDragging = false,
 }: InventoryPanelProps) {
+  const { isTablet, isTouchDevice } = useDeviceDetection()
+  
   return (
     <div className="box inventory-panel">
       <div className="panel-title-row">
@@ -89,7 +94,7 @@ export function InventoryPanel({
               if (e.target.value) onFilterChange('all')
             }}
           />
-          <div className="inventory-list">
+          <div className={`inventory-list ${isDragging ? 'dragging' : ''}`}>
             {filteredItems.map((item) => {
               const selectedId = selectedVariantMap[item.id]
               const activeItem =
@@ -102,40 +107,63 @@ export function InventoryPanel({
                   key={item.id}
                   className={`inventory-item-row ${getRarityClass(activeItem.rarity)}`}
                   draggable
-                  onDragStart={(e) => onDragStart(e, activeItem, 'inventory')}
+                  onDragStart={(e) => {
+                    // Check if drag started from left half on touch devices
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const x = e.clientX - rect.left
+                    if (isTouchDevice && !isTablet && x > rect.width * 0.5) {
+                      e.preventDefault()
+                      return
+                    }
+                    onDragStart(e, activeItem, 'inventory')
+                  }}
                   onDragEnd={onDragEnd}
-                  onTouchStart={(e) => onTouchStart(e, activeItem, 'inventory')}
+                  onTouchStart={(e) => {
+                    // Only allow dragging from middle 10-60% range
+                    const touch = e.touches[0]
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const x = touch.clientX - rect.left
+                    if (x < rect.width * 0.1 || x > rect.width * 0.6) {
+                      // Don't start drag from left 10% or right 40% - let it scroll
+                      return
+                    }
+                    onTouchStart(e, activeItem, 'inventory')
+                  }}
                   onTouchMove={onTouchMove}
-                  onTouchEnd={onTouchEnd}
+                  onTouchEnd={(e) => onTouchEnd(e)}
                 >
-                  <div className="item-icon-placeholder">
-                    {activeItem.isImage ? (
-                      <img src={activeItem.icon} alt={activeItem.name} className="item-icon-image" />
-                    ) : (
-                      activeItem.icon
+                  <div className="item-drag-zone">
+                    <div className="item-icon-placeholder">
+                      {activeItem.isImage ? (
+                        <img src={activeItem.icon} alt={activeItem.name} className="item-icon-image" />
+                      ) : (
+                        activeItem.icon
+                      )}
+                    </div>
+                    <div className="item-info">
+                      <span className="item-name">{activeItem.name}</span>
+                    </div>
+                  </div>
+                  <div className="item-scroll-zone">
+                    {item.variants && item.variants.length > 1 && (
+                      <div className="tier-selector">
+                        {item.variants.map((v, idx) => (
+                          <button
+                            key={v.id}
+                            className={`tier-btn ${activeItem.id === v.id ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              console.log('[Inventory] Selected Variant:', v.id, 'for item:', item.id)
+                              onVariantSelect(item.id, v.id)
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            {['I', 'II', 'III', 'IV', 'V'][idx] || idx + 1}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="item-info">
-                    <span className="item-name">{activeItem.name}</span>
-                  </div>
-                  {item.variants && item.variants.length > 1 && (
-                    <div className="tier-selector">
-                      {item.variants.map((v, idx) => (
-                        <button
-                          key={v.id}
-                          className={`tier-btn ${activeItem.id === v.id ? 'active' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            console.log('[Inventory] Selected Variant:', v.id, 'for item:', item.id)
-                            onVariantSelect(item.id, v.id)
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          {['I', 'II', 'III', 'IV', 'V'][idx] || idx + 1}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )
             })}

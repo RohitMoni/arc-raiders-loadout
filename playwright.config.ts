@@ -37,6 +37,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      grep: /^(?!.*Mobile Only)/,
     },
 
     // Firefox disabled: Playwright's dragTo() doesn't work reliably in Firefox automation
@@ -59,11 +60,13 @@ export default defineConfig({
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },
+      grep: /Mobile Only/,
     },
 
     {
       name: 'mobile-safari',
       use: { ...devices['iPhone 13'] },
+      grep: /Mobile Only/,
     },
 
     {

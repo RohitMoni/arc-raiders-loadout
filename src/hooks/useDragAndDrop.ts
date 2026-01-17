@@ -1,4 +1,4 @@
-import { useState, useRef, DragEvent, TouchEvent } from 'react'
+import { useState, useRef, useEffect, DragEvent, TouchEvent } from 'react'
 
 interface Item {
   id: string
@@ -56,8 +56,27 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
   const slotRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const slotCenters = useRef<Map<string, { x: number; y: number }>>(new Map())
   const initialTooltipPos = useRef({ x: 0, y: 0 })
+  
+  // Touch handling refs
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
+  const lastTouchPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const autoScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const touchMoveThreshold = 10 // px to start drag
+
+  // Attach non-passive touchmove listener to prevent scroll during drag
+  useEffect(() => {
+    const preventDefaultTouch = (e: globalThis.TouchEvent) => {
+      if (draggedItem && touchStartPos.current) {
+        e.preventDefault()
+      }
+    }
+    
+    document.addEventListener('touchmove', preventDefaultTouch, { passive: false })
+    
+    return () => {
+      document.removeEventListener('touchmove', preventDefaultTouch)
+    }
+  }, [draggedItem])
 
   const handleDragStart = (
     e: DragEvent,
@@ -187,6 +206,7 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
   ) => {
     const touch = e.touches[0]
     touchStartPos.current = { x: touch.clientX, y: touch.clientY }
+    lastTouchPos.current = { x: touch.clientX, y: touch.clientY }
     
     console.log('[TouchStart] Item:', item.name, 'Source:', sourceSection, 'Index:', sourceIndex, 'ModIndex:', sourceModIndex)
     
@@ -211,12 +231,33 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
 
     setDragSource({ section: sourceSection, index: sourceIndex, modIndex: sourceModIndex, isSplit })
     setDraggedItem(dragItem)
+    
+    // Start auto-scroll interval for loadout panel (mobile only, < 768px)
+    const isMobileViewport = window.innerWidth < 768
+    if (isMobileViewport) {
+      if (autoScrollInterval.current) {
+        clearInterval(autoScrollInterval.current)
+      }
+      autoScrollInterval.current = setInterval(() => {
+        const contentGrid = document.querySelector('.content-grid') as HTMLElement
+        if (contentGrid && lastTouchPos.current) {
+          const viewportHeight = window.innerHeight
+          const scrollThreshold = viewportHeight * 0.25
+          
+          if (lastTouchPos.current.y > viewportHeight - scrollThreshold) {
+            contentGrid.scrollTop += 5
+          }
+        }
+      }, 16) // ~60fps
+    }
   }
 
   const handleTouchMove = (e: TouchEvent) => {
     if (!draggedItem || !touchStartPos.current) return
     
     const touch = e.touches[0]
+    lastTouchPos.current = { x: touch.clientX, y: touch.clientY }
+    
     const deltaX = Math.abs(touch.clientX - touchStartPos.current.x)
     const deltaY = Math.abs(touch.clientY - touchStartPos.current.y)
     
@@ -225,7 +266,7 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
       return
     }
 
-    e.preventDefault() // Prevent scrolling during drag
+    // Note: preventDefault is handled by document-level non-passive listener
 
     // Update ghost position
     if (ghostRef.current) {
@@ -233,20 +274,63 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
       ghostRef.current.style.top = `${touch.clientY - 65}px`
     }
 
-    // Find closest slot (same logic as mouse drag)
-    let closestKey: string | null = null
-    let minDistance = Infinity
-    const threshold = 80 // px
+    // Check if we're in the auto-scroll zone - if so, skip slot detection for smooth scrolling
+    // Only apply in mobile viewports (< 768px)
+    const isMobileViewport = window.innerWidth < 768
+    const viewportHeight = window.innerHeight
+    const scrollThreshold = viewportHeight * 0.25
+    const inAutoScrollZone = isMobileViewport && touch.clientY > viewportHeight - scrollThreshold
 
-    slotCenters.current.forEach((center, key) => {
-      const dist = Math.sqrt(Math.pow(touch.clientX - center.x, 2) + Math.pow(touch.clientY - center.y, 2))
-      if (dist < minDistance) {
-        minDistance = dist
-        closestKey = key
+    // Skip slot detection if in auto-scroll zone to prevent jitter
+    if (inAutoScrollZone) {
+      if (activeSlot) {
+        console.log('[TouchMove] In auto-scroll zone, clearing active slot')
+        setActiveSlot(null)
       }
-    })
+      if (dropValidity !== null) setDropValidity(null)
+      return
+    }
 
-    if (closestKey && minDistance < threshold) {
+    // Find slot using element detection and bounding box, prioritizing nested slots
+    let closestKey: string | null = null
+
+    // Check if touch is over footer, inventory, or other non-slot elements
+    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY)
+    
+    // Only skip slot detection for footer/buttons on mobile (< 768px)
+    // On desktop/tablet, we still want to detect slots even if over buttons
+    const isOverFooter = isMobileViewport && (
+      elementAtPoint?.closest('.footer-buttons') || 
+      elementAtPoint?.closest('button') ||
+      elementAtPoint?.classList.contains('icon-btn')
+    )
+    const isOverInventory = elementAtPoint?.closest('.inventory-main')
+
+    // Only check for slot intersection if not over footer/buttons/inventory
+    if (!isOverFooter && !isOverInventory) {
+      // Check all slots and prefer more specific ones (e.g., mod slots over weapon slots)
+      slotRefs.current.forEach((el, key) => {
+        // First check if element is directly inside this slot
+        const containsElement = el.contains(elementAtPoint)
+        
+        // Then check bounding box
+        const rect = el.getBoundingClientRect()
+        const withinBounds = touch.clientX >= rect.left &&
+          touch.clientX <= rect.right &&
+          touch.clientY >= rect.top &&
+          touch.clientY <= rect.bottom
+        
+        if (containsElement || withinBounds) {
+          // Prefer slots with more specificity (more parts in key)
+          // e.g., "weapons|0|1" (mod slot) over "weapons|0" (weapon slot)
+          if (!closestKey || key.split('|').length > closestKey.split('|').length) {
+            closestKey = key
+          }
+        }
+      })
+    }
+
+    if (closestKey) {
       const [section, indexStr, modIndexStr] = (closestKey as string).split('|')
       const index = parseInt(indexStr)
       const modIndex = modIndexStr ? parseInt(modIndexStr) : undefined
@@ -310,6 +394,12 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
     setActiveSlot(null)
     setDragSource(null)
     touchStartPos.current = null
+    
+    // Clear auto-scroll interval
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current)
+      autoScrollInterval.current = null
+    }
   }
 
   return {

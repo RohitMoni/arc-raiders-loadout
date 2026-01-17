@@ -30,12 +30,16 @@ export function EquipmentSection({ renderSlot }: EquipmentSectionProps) {
   return (
     <div className="column-left">
       <h3 className="section-title">EQUIPMENT</h3>
-      <div className="augment-shield-row">
-        {renderSlot('augment', -1, 'augment-slot')}
-        {renderSlot('shield', -1, 'shield-slot')}
+      <div className="equipment-mobile-layout">
+        <div className="augment-shield-row">
+          {renderSlot('augment', -1, 'augment-slot')}
+          {renderSlot('shield', -1, 'shield-slot')}
+        </div>
+        <div className="weapons-section">
+          {renderSlot('weapons', 0, 'weapon-slot')}
+          {renderSlot('weapons', 1, 'weapon-slot')}
+        </div>
       </div>
-      {renderSlot('weapons', 0, 'weapon-slot')}
-      {renderSlot('weapons', 1, 'weapon-slot')}
     </div>
   )
 }

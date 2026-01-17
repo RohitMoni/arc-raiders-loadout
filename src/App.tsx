@@ -3,7 +3,9 @@ import { SpeedInsights } from '@vercel/speed-insights/react'
 import { InventoryPanel } from './components/InventoryPanel'
 import { LoadoutPanel } from './components/LoadoutPanel'
 import { EquipmentSection } from './components/EquipmentSection'
+import { LootTableModal } from './components/LootTableModal'
 import { useDragAndDrop } from './hooks/useDragAndDrop'
+import { useDeviceDetection } from './hooks/useDeviceDetection'
 import './App.css'
 
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -120,6 +122,7 @@ const calculateExtraSlotsCount = (augment: Item | null) => {
 }
 
 function App() {
+  const { isTablet, isTouchDevice } = useDeviceDetection()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [inventoryItems, setInventoryItems] = useState<Item[]>([])
@@ -418,6 +421,178 @@ function App() {
       return { ...prev, backpack: newBackpack, quickUse: newQuickUse, safePocket: newSafePocket, extra: newExtra }
     })
   }, [loadout.augment, extraSlotConfig, allItemData])
+
+  // Prevent scrolling during drag operations - but allow scrolling on target panel
+  // Auto-scroll content-grid when dragging from inventory and pointer is near edges
+  useEffect(() => {
+    if (!draggedItem || dragSource?.section !== 'inventory') return
+
+    const contentGrid = document.querySelector('.content-grid') as HTMLElement
+    if (!contentGrid) return
+
+    let autoScrollInterval: ReturnType<typeof setInterval> | null = null
+    let lastPointerY = 0
+
+    // Track pointer position
+    const handlePointerMove = (e: PointerEvent | TouchEvent) => {
+      let clientY = 0
+      if (e instanceof PointerEvent) {
+        clientY = e.clientY
+      } else if (e instanceof TouchEvent && e.touches.length > 0) {
+        clientY = e.touches[0].clientY
+      }
+      lastPointerY = clientY
+    }
+
+    // Auto-scroll based on pointer position in viewport (lower 25% of screen)
+    const autoScroll = () => {
+      const viewportHeight = window.innerHeight
+      const scrollThreshold = viewportHeight * 0.25 // 25% from bottom of viewport
+      
+      // Pointer position relative to viewport
+      const pointerYRelative = lastPointerY
+
+      // Scroll speed
+      const scrollSpeed = 5
+
+      if (pointerYRelative > viewportHeight - scrollThreshold) {
+        // Near bottom of viewport - scroll down
+        const previousScrollTop = contentGrid.scrollTop
+        contentGrid.scrollTop += scrollSpeed
+        const actualScroll = contentGrid.scrollTop - previousScrollTop
+        
+        // Adjust lastPointerY to compensate for scroll movement
+        // When content scrolls down, pointer needs to move down relative to viewport to stay over same content
+        lastPointerY += actualScroll
+      }
+    }
+
+    // Add listeners
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('touchmove', handlePointerMove)
+
+    // Lock inventory scroll during drag
+    const inventoryList = document.querySelector('.inventory-list') as HTMLElement
+    if (inventoryList) {
+      const initialInventoryScroll = inventoryList.scrollTop
+      
+      // Add scroll-locked class to completely disable scrolling
+      inventoryList.classList.add('scroll-locked')
+      
+      const lockInventoryScroll = () => {
+        if (inventoryList.scrollTop !== initialInventoryScroll) {
+          inventoryList.scrollTop = initialInventoryScroll
+        }
+      }
+
+      inventoryList.addEventListener('scroll', lockInventoryScroll, { passive: false })
+
+      // Start auto-scroll timer
+      autoScrollInterval = setInterval(autoScroll, 16) // ~60fps
+
+      return () => {
+        inventoryList.classList.remove('scroll-locked')
+        inventoryList.removeEventListener('scroll', lockInventoryScroll)
+        document.removeEventListener('pointermove', handlePointerMove)
+        document.removeEventListener('touchmove', handlePointerMove)
+        if (autoScrollInterval) clearInterval(autoScrollInterval)
+      }
+    }
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('touchmove', handlePointerMove)
+      if (autoScrollInterval) clearInterval(autoScrollInterval)
+    }
+  }, [draggedItem, dragSource])
+
+  // Auto-scroll loadout panel when dragging from it based on pointer position in top/bottom 25%
+  useEffect(() => {
+    if (!draggedItem || dragSource?.section === 'inventory' || activeSlot) return
+
+    const contentGrid = document.querySelector('.content-grid') as HTMLElement
+    if (!contentGrid) return
+
+    let autoScrollInterval: ReturnType<typeof setInterval> | null = null
+    let lastPointerY = 0
+
+    // Track pointer position
+    const handlePointerMove = (e: PointerEvent | TouchEvent) => {
+      let clientY = 0
+      if (e instanceof PointerEvent) {
+        clientY = e.clientY
+      } else if (e instanceof TouchEvent && e.touches.length > 0) {
+        clientY = e.touches[0].clientY
+      }
+      lastPointerY = clientY
+    }
+
+    // Auto-scroll based on pointer position in content-grid
+    const autoScroll = () => {
+      const rect = contentGrid.getBoundingClientRect()
+      const gridHeight = rect.height
+      const scrollThreshold = gridHeight * 0.25 // 25% from top/bottom
+      
+      // Position relative to content-grid
+      const pointerYRelative = lastPointerY - rect.top
+
+      // Scroll speed
+      const scrollSpeed = 5
+
+      if (pointerYRelative < scrollThreshold) {
+        // Near top - scroll up
+        contentGrid.scrollTop -= scrollSpeed
+      } else if (pointerYRelative > gridHeight - scrollThreshold) {
+        // Near bottom - scroll down
+        contentGrid.scrollTop += scrollSpeed
+      }
+    }
+
+    // Add listeners
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('touchmove', handlePointerMove)
+
+    // Add scroll-locked class to prevent manual scrolling during auto-scroll
+    contentGrid.classList.add('scroll-locked')
+
+    // Start auto-scroll timer
+    autoScrollInterval = setInterval(autoScroll, 16) // ~60fps
+
+    return () => {
+      contentGrid.classList.remove('scroll-locked')
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('touchmove', handlePointerMove)
+      if (autoScrollInterval) clearInterval(autoScrollInterval)
+    }
+  }, [draggedItem, dragSource, activeSlot])
+
+  // Lock scroll position when an item is selected
+  useEffect(() => {
+    if (!activeSlot) return
+
+    const inventoryList = document.querySelector('.inventory-list') as HTMLElement
+    const contentGrid = document.querySelector('.content-grid') as HTMLElement
+
+    const initialInventoryScroll = inventoryList?.scrollTop ?? 0
+    const initialContentScroll = contentGrid?.scrollTop ?? 0
+
+    let lockInterval: ReturnType<typeof setInterval> | null = null
+
+    const lockScroll = () => {
+      if (inventoryList && inventoryList.scrollTop !== initialInventoryScroll) {
+        inventoryList.scrollTop = initialInventoryScroll
+      }
+      if (contentGrid && contentGrid.scrollTop !== initialContentScroll) {
+        contentGrid.scrollTop = initialContentScroll
+      }
+    }
+
+    lockInterval = setInterval(lockScroll, 16)
+
+    return () => {
+      if (lockInterval) clearInterval(lockInterval)
+    }
+  }, [activeSlot])
 
   // --- Persistence & Sharing Logic ---
 
@@ -1339,7 +1514,20 @@ function App() {
             draggable={!isFixedSlot}
             onDragStart={(e) => handleDragStart(e, displayItem, section, index)}
             onDragEnd={handleDragEnd}
-            onTouchStart={(e) => handleTouchStart(e, displayItem, section, index)}
+            onTouchStart={(e) => {
+              // Check if touch started from middle 50% on touch devices
+              const touch = e.touches[0]
+              const rect = e.currentTarget.getBoundingClientRect()
+              const x = touch.clientX - rect.left
+              if (isTouchDevice && !isTablet) {
+                // Only allow drag from middle 50% (25% to 75%) on phones
+                if (x < rect.width * 0.25 || x > rect.width * 0.75) {
+                  // Don't start drag from outer areas - let it scroll
+                  return
+                }
+              }
+              handleTouchStart(e, displayItem, section, index)
+            }}
             onTouchMove={handleTouchMove}
             onTouchEnd={(e) => handleTouchEnd(e, handleTouchSlotDrop, handleTouchInventoryDrop)}
             onMouseEnter={(e) => {
@@ -1550,6 +1738,7 @@ function App() {
           search={search}
           onSearchChange={setSearch}
           onFilterChange={setActiveFilter}
+          isDragging={!!draggedItem}
         />
         <LoadoutPanel
           loadout={loadout}
@@ -1559,9 +1748,10 @@ function App() {
           onShowLootTable={() => setShowLootTable(true)}
           onShare={handleShare}
           onReset={handleReset}
+          isDragging={!!draggedItem}
         >
           <EquipmentSection renderSlot={renderSlot} />
-          <div className="column-middle">
+          <div className={`column-middle ${!!draggedItem ? 'dragging' : ''}`}>
             {loadout.backpack.length > 0 && (
               <>
                 <h3 className="section-title">BACKPACK</h3>
@@ -1573,7 +1763,7 @@ function App() {
               </>
             )}
           </div>
-          <div className="column-right">
+          <div className={`column-right ${!!draggedItem ? 'dragging' : ''}`}>
             <div className="sub-section">
               <h3 className="section-title">QUICK USE</h3>
               <div className="quick-use-grid">
@@ -1582,10 +1772,10 @@ function App() {
                 ))}
               </div>
 
-              <h3 className="section-title" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+              <h3 className="section-title" style={{ display: extraSlotConfig.count > 0 ? 'block' : 'none' }}>
                 {extraSlotConfig.types.join(' / ') || 'EXTRA'}
               </h3>
-              <div className="extra-grid" style={{ visibility: extraSlotConfig.count > 0 ? 'visible' : 'hidden' }}>
+              <div className="extra-grid" style={{ display: extraSlotConfig.count > 0 ? 'grid' : 'none' }}>
                 {loadout.extra.map((_, i) => (
                   <div key={i}>{renderSlot('extra', i, 'grid-item')}</div>
                 ))}
@@ -1594,8 +1784,8 @@ function App() {
                 ))}
               </div>
 
-              <h3 className="section-title" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>SAFE POCKET</h3>
-              <div className="safe-pocket-grid" style={{ visibility: loadout.safePocket.length > 0 ? 'visible' : 'hidden' }}>
+              <h3 className="section-title" style={{ display: loadout.safePocket.length > 0 ? 'block' : 'none' }}>SAFE POCKET</h3>
+              <div className="safe-pocket-grid" style={{ display: loadout.safePocket.length > 0 ? 'grid' : 'none' }}>
                 {loadout.safePocket.map((_, i) => (
                   <div key={i}>{renderSlot('safePocket', i, 'grid-item')}</div>
                 ))}
@@ -1648,42 +1838,14 @@ function App() {
       )}
 
       {showLootTable && (
-        <div className="loot-overlay" onClick={() => setShowLootTable(false)}>
-          <div className="loot-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="loot-header">
-              <h3 className="loot-title">{showRecycleList ? 'BEST TO RECYCLE' : 'REQUIRED LOOT'}</h3>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <button className="icon-btn" onClick={() => setShowRecycleList(!showRecycleList)} title={showRecycleList ? "Show Loot List" : "Show Recycle List"}>
-                   {showRecycleList ? (
-                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-                   ) : (
-                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg>
-                   )}
-                </button>
-                <button className="icon-btn" onClick={handleShareLootList} title="Share Mobile List">
-                  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
-                </button>
-                <button className="close-btn" onClick={() => setShowLootTable(false)}>
-                  ×
-                </button>
-              </div>
-            </div>
-            <div className="loot-list">
-              {(showRecycleList ? getRecycleList() : getLootTable()).map((item) => (
-                <div key={item.id} className="loot-item">
-                  {!showRecycleList && <span className="loot-count">{item.count}</span>}
-                  <div className="loot-icon">
-                    {item.isImage ? <img src={item.icon} alt={item.name} /> : item.icon}
-                  </div>
-                  <span className="loot-name">{item.name}</span>
-                </div>
-              ))}
-              {getLootTable().length === 0 && (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>No craftable items in loadout</div>
-              )}
-            </div>
-          </div>
-        </div>
+        <LootTableModal
+          lootTable={getLootTable()}
+          recycleList={getRecycleList()}
+          showRecycleList={showRecycleList}
+          onToggleRecycleList={() => setShowRecycleList(!showRecycleList)}
+          onShareLootList={handleShareLootList}
+          onClose={() => setShowLootTable(false)}
+        />
       )}
 
       <SpeedInsights />
