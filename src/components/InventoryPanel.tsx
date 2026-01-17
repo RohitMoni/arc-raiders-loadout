@@ -119,12 +119,12 @@ export function InventoryPanel({
                   }}
                   onDragEnd={onDragEnd}
                   onTouchStart={(e) => {
-                    // Check if touch started from left half on mobile
+                    // Check if touch started from right 75% for dragging
                     const touch = e.touches[0]
                     const rect = e.currentTarget.getBoundingClientRect()
                     const x = touch.clientX - rect.left
-                    if (x > rect.width * 0.5) {
-                      // Don't start drag from right half - let it scroll
+                    if (x < rect.width * 0.25) {
+                      // Don't start drag from left 25% - let it scroll
                       return
                     }
                     onTouchStart(e, activeItem, 'inventory')

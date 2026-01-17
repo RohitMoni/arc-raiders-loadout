@@ -202,8 +202,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding-left: 16px;
-  padding-right: 16px;
+  padding-left: 8px;
+  padding-right: 8px;
   overflow: hidden;
 }
 
@@ -1131,9 +1131,8 @@
   text-transform: uppercase;
 }
 
-/* Touch-primary devices in portrait (phones, small tablets) - ALWAYS use mobile layout */
-/* This rule has highest specificity to override any other layout rules */
-@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+/* Mobile devices in portrait - use width instead of hover/pointer to avoid inspector breaking it */
+@media (max-width: 767px) and (orientation: portrait) {
   html, body {
     overscroll-behavior: none;
     overscroll-behavior-y: contain;
@@ -1196,7 +1195,7 @@
   }
 
   .inventory-item-row {
-    padding: 8px;
+    padding: 8px 8px 8px 20px;
     border-radius: 8px;
     /* Better touch target with more spacing */
     min-height: 56px;
@@ -1211,14 +1210,15 @@
     display: flex;
     align-items: center;
     flex: 1;
-    min-width: 50%;
+    min-width: 45%;
+    margin-left: 8px;
   }
 
   .item-scroll-zone {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    min-width: 50%;
+    min-width: 55%;
     /* Make right side better for scrolling */
     touch-action: pan-y;
   }
