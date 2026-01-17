@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Mobile Layout Verification - Phone Only', () => {
-  test.beforeEach(async ({ page }) => {
+test.describe('Mobile Layout Verification - Mobile Only', () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Only run these tests on mobile phone projects
+    if (!['mobile-chrome', 'mobile-safari'].includes(testInfo.project.name)) {
+      test.skip()
+    }
+    
     await page.goto('/')
     // Wait for inventory to load
     await page.waitForSelector('.inventory-list')

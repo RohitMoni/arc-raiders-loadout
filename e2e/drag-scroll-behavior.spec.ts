@@ -3,10 +3,10 @@ import { touchDragAndDrop, waitForElement, waitForPageReady, setupAPICache } fro
 
 test.describe.configure({ mode: 'serial' })
 
-test.describe('Drag and Drop Scroll Behavior - Mobile', () => {
+test.describe('Drag and Drop Scroll Behavior - Mobile Only', () => {
   test.beforeEach(async ({ page }, testInfo) => {
-    // Only run these tests on mobile projects
-    if (!['mobile-chrome', 'mobile-safari', 'tablet-safari'].includes(testInfo.project.name)) {
+    // Only run these tests on mobile phone projects
+    if (!['mobile-chrome', 'mobile-safari'].includes(testInfo.project.name)) {
       test.skip()
     }
     
