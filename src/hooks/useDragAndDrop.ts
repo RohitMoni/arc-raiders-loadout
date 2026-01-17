@@ -256,7 +256,7 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
       ghostRef.current.style.top = `${touch.clientY - 65}px`
     }
 
-    // Find closest slot using bounding box intersection instead of center distance
+    // Find slot using element detection and bounding box, prioritizing nested slots
     let closestKey: string | null = null
 
     // Check if touch is over footer, inventory, or other non-slot elements
@@ -268,16 +268,24 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
 
     // Only check for slot intersection if not over footer/buttons/inventory
     if (!isOverFooter && !isOverInventory) {
+      // Check all slots and prefer more specific ones (e.g., mod slots over weapon slots)
       slotRefs.current.forEach((el, key) => {
+        // First check if element is directly inside this slot
+        const containsElement = el.contains(elementAtPoint)
+        
+        // Then check bounding box
         const rect = el.getBoundingClientRect()
-        // Check if touch point is within the slot bounds
-        if (
-          touch.clientX >= rect.left &&
+        const withinBounds = touch.clientX >= rect.left &&
           touch.clientX <= rect.right &&
           touch.clientY >= rect.top &&
           touch.clientY <= rect.bottom
-        ) {
-          closestKey = key
+        
+        if (containsElement || withinBounds) {
+          // Prefer slots with more specificity (more parts in key)
+          // e.g., "weapons|0|1" (mod slot) over "weapons|0" (weapon slot)
+          if (!closestKey || key.split('|').length > closestKey.split('|').length) {
+            closestKey = key
+          }
         }
       })
     }

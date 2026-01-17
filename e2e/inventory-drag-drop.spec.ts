@@ -231,4 +231,48 @@ test.describe('Inventory Drag and Drop', () => {
     const placedItem = quickUseSlot.locator('.slot-item')
     await expect(placedItem).toBeVisible()
   })
+
+  test('should equip weapon modification to weapon accessory slot', async ({ page }) => {
+    // First, equip a weapon that has mod slots (Anvil)
+    const weaponFilter = page.locator('button[title="Weapons"]')
+    await weaponFilter.click()
+    
+    await waitForElement(page.locator('.inventory-item-row').first())
+    
+    // Find and equip Anvil weapon
+    const anvilItem = page.locator('.inventory-item-row').filter({ hasText: 'Anvil' }).first()
+    await expect(anvilItem).toBeVisible()
+    
+    const weaponSlot = page.locator('.weapon-slot').first()
+    await dragAndDrop(page, anvilItem, weaponSlot)
+    await waitForDragDropComplete(weaponSlot)
+    
+    // Verify weapon is equipped
+    const equippedWeapon = weaponSlot.locator('.slot-item')
+    await expect(equippedWeapon).toBeVisible()
+    
+    // Now filter for modifications
+    const modFilter = page.locator('button[title="Mods"]')
+    await modFilter.click()
+    
+    await waitForElement(page.locator('.inventory-item-row').first())
+    
+    // Find a silencer or compensator modification
+    const modItem = page.locator('.inventory-item-row').filter({ hasText: /Silencer|Compensator/i }).first()
+    await expect(modItem).toBeVisible()
+    
+    // Find the first mod slot on the equipped weapon
+    const modSlot = weaponSlot.locator('.mod-slot').first()
+    await expect(modSlot).toBeVisible()
+    
+    // Drag modification to the mod slot
+    await dragAndDrop(page, modItem, modSlot)
+    
+    // Wait for the modification to appear in the slot
+    await page.waitForTimeout(500)
+    
+    // Verify modification is equipped in the mod slot
+    const equippedMod = modSlot.locator('.slot-item')
+    await expect(equippedMod).toBeVisible()
+  })
 })
