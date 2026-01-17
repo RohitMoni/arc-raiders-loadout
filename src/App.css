@@ -230,6 +230,7 @@
   gap: 8px;
   overflow-y: auto;
   padding-right: 8px;
+  padding-left: 12px;
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }

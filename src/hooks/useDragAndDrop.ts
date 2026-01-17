@@ -256,6 +256,21 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
       ghostRef.current.style.top = `${touch.clientY - 65}px`
     }
 
+    // Check if we're in the auto-scroll zone - if so, skip slot detection for smooth scrolling
+    const viewportHeight = window.innerHeight
+    const scrollThreshold = viewportHeight * 0.25
+    const inAutoScrollZone = touch.clientY > viewportHeight - scrollThreshold
+
+    // Skip slot detection if in auto-scroll zone to prevent jitter
+    if (inAutoScrollZone) {
+      if (activeSlot) {
+        console.log('[TouchMove] In auto-scroll zone, clearing active slot')
+        setActiveSlot(null)
+      }
+      if (dropValidity !== null) setDropValidity(null)
+      return
+    }
+
     // Find slot using element detection and bounding box, prioritizing nested slots
     let closestKey: string | null = null
 
