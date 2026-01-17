@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'large-tablet'
 
@@ -37,14 +37,31 @@ export const deviceDetection = {
 }
 
 export const useDeviceDetection = () => {
-  // Detect device type once at startup and cache it
-  // This prevents Chrome DevTools inspector from switching the layout
-  const [deviceType] = useState<DeviceType>(() => 
+  const [deviceType, setDeviceType] = useState<DeviceType>(() => 
     deviceDetection.getDeviceType()
   );
 
-  // Note: We deliberately don't listen to media query changes
-  // because Chrome DevTools inspector breaks media queries when activated
+  useEffect(() => {
+    const mediaQueries = [
+      window.matchMedia('(hover: none) and (pointer: coarse)'),
+      window.matchMedia('(hover: hover) and (pointer: fine)'),
+      window.matchMedia('(orientation: portrait)'),
+      window.matchMedia('(min-width: 1024px)')
+    ];
+
+    const updateDeviceType = () => {
+      setDeviceType(deviceDetection.getDeviceType());
+    };
+
+    // Use modern addEventListener API
+    mediaQueries.forEach(mq => mq.addEventListener('change', updateDeviceType));
+    window.addEventListener('resize', updateDeviceType);
+
+    return () => {
+      mediaQueries.forEach(mq => mq.removeEventListener('change', updateDeviceType));
+      window.removeEventListener('resize', updateDeviceType);
+    };
+  }, []);
 
   return {
     deviceType,

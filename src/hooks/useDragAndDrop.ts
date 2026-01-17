@@ -1,4 +1,4 @@
-import { useState, useRef, DragEvent, TouchEvent } from 'react'
+import { useState, useRef, useEffect, DragEvent, TouchEvent } from 'react'
 
 interface Item {
   id: string
@@ -62,6 +62,21 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
   const lastTouchPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const autoScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null)
   const touchMoveThreshold = 10 // px to start drag
+
+  // Attach non-passive touchmove listener to prevent scroll during drag
+  useEffect(() => {
+    const preventDefaultTouch = (e: globalThis.TouchEvent) => {
+      if (draggedItem && touchStartPos.current) {
+        e.preventDefault()
+      }
+    }
+    
+    document.addEventListener('touchmove', preventDefaultTouch, { passive: false })
+    
+    return () => {
+      document.removeEventListener('touchmove', preventDefaultTouch)
+    }
+  }, [draggedItem])
 
   const handleDragStart = (
     e: DragEvent,
@@ -248,7 +263,7 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
       return
     }
 
-    e.preventDefault() // Prevent scrolling during drag
+    // Note: preventDefault is handled by document-level non-passive listener
 
     // Update ghost position
     if (ghostRef.current) {
@@ -276,9 +291,15 @@ export function useDragAndDrop({ canEquip }: UseDragAndDropProps) {
 
     // Check if touch is over footer, inventory, or other non-slot elements
     const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY)
-    const isOverFooter = elementAtPoint?.closest('.footer-buttons') || 
-                        elementAtPoint?.closest('button') ||
-                        elementAtPoint?.classList.contains('icon-btn')
+    
+    // Only skip slot detection for footer/buttons on mobile (< 768px)
+    // On desktop/tablet, we still want to detect slots even if over buttons
+    const isMobileViewport = window.innerWidth < 768
+    const isOverFooter = isMobileViewport && (
+      elementAtPoint?.closest('.footer-buttons') || 
+      elementAtPoint?.closest('button') ||
+      elementAtPoint?.classList.contains('icon-btn')
+    )
     const isOverInventory = elementAtPoint?.closest('.inventory-main')
 
     // Only check for slot intersection if not over footer/buttons/inventory
