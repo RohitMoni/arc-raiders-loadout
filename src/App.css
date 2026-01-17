@@ -265,6 +265,18 @@
   cursor: grabbing;
 }
 
+.item-drag-zone {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.item-scroll-zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .item-icon-placeholder {
   width: 40px;
   height: 40px;
